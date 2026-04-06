@@ -37,6 +37,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    
     final size = MediaQuery.of(context).size;
     final double sw = size.width;
     final double sh = size.height;
@@ -55,9 +56,13 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
     final double minBarLeft = gameBarWidth * (1 / 31);
     final double maxBarLeft = gameBarWidth - minBarLeft - movingBarWidth;
 
+    // 🔹 NEW WIDTHS (layered effect)
     final double greenWidth = movingBarWidth;
-    final double yellowWidth = movingBarWidth * 0.6;
-    final double redWidth = movingBarWidth * 0.3;
+    final double yellowWidth = movingBarWidth * 0.75;
+    final double redWidth = movingBarWidth * 0.45;
+
+    // final double fishWidth = redWidth*0.6;
+    // final double fishHeight = innerBarHeight;
 
     return Scaffold(
       body: Stack(
@@ -138,8 +143,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            
-                            // Green
+                            //Green
                             Image.asset(
                               'assets/green_bar.png',
                               width: greenWidth,
@@ -147,7 +151,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
                               fit: BoxFit.fill,
                             ),
 
-                            // Yellow
+                            //Yellow
                             Image.asset(
                               'assets/yellow_bar.png',
                               width: yellowWidth,
@@ -155,7 +159,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
                               fit: BoxFit.fill,
                             ),
 
-                            // Red
+                            //Red
                             Image.asset(
                               'assets/red_bar.png',
                               width: redWidth,
@@ -171,7 +175,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
-
+          
           // Button
           Positioned(
             top: containerTop + sh * 0.12 + gameBarHeight + 20,
