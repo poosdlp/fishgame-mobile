@@ -36,7 +36,7 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
   static const double _redGainPerSecond = 0.42;
   static const double _yellowGainPerSecond = 0.22;
   static const double _greenGainPerSecond = 0.10;
-  static const double _whiteLossPerSecond = 0.18;
+  static const double _whiteLossPerSecond = 0.08;
 
   @override
   void initState() {
@@ -355,18 +355,41 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
                           Expanded(
                             child: SizedBox(
                               height: meterOuterHeight,
-                              child: Center(
-                                child: Text(
-                                  'Fishing Reel Meter\n\nHold screen = fish rises\nRelease = fish falls\nRed = best timing\nYellow = good timing\nGreen = low-score timing\nWhite = miss zone',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        height: 1.25,
-                                        fontWeight: FontWeight.w600,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.pushNamedAndRemoveUntil(
+                                        context,
+                                        '/login',
+                                        (route) => false,
+                                      );
+                                    },
+                                    icon: const Icon(Icons.arrow_back),
+                                    label: const Text('Log In'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xCC000000),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  Expanded(
+                                    child: Center(
+                                      child: Text(
+                                        'Fishing Reel Meter\n\nHold screen = fish rises\nRelease = fish falls\nRed = best timing\nYellow = good timing\nGreen = low-score timing\nWhite = miss zone',
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              color: Colors.white,
+                                              height: 1.25,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                       ),
-                                ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -389,25 +412,6 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
                       ),
                     ),
                   ],
-                ),
-              ),
-              Positioned(
-                top: safeTop + 8,
-                left: 12,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      '/login',
-                      (route) => false,
-                    );
-                  },
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Log In'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xCC000000),
-                    foregroundColor: Colors.white,
-                  ),
                 ),
               ),
             ] else ...[
