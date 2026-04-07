@@ -6,7 +6,7 @@ class FishBackgroundScreen extends StatefulWidget {
   const FishBackgroundScreen({
     super.key,
     required this.child,
-    this.duration = const Duration(seconds: 12),
+    this.duration = const Duration(seconds: 8),
     this.useSafeArea = true,
     this.scrollable = true,
   });
@@ -34,6 +34,17 @@ class _FishBackgroundScreenState extends State<FishBackgroundScreen>
   }
 
   @override
+  void didUpdateWidget(covariant FishBackgroundScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -41,7 +52,7 @@ class _FishBackgroundScreenState extends State<FishBackgroundScreen>
 
   @override
   Widget build(BuildContext context) {
-    Widget content = widget.child;
+    Widget content = RepaintBoundary(child: widget.child);
 
     if (widget.scrollable) {
       content = SingleChildScrollView(child: content);
@@ -52,12 +63,15 @@ class _FishBackgroundScreenState extends State<FishBackgroundScreen>
     }
 
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          WaterSceneBackground(animation: _controller),
-          content,
-        ],
+      body: TickerMode(
+        enabled: TickerMode.valuesOf(context).enabled,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            WaterSceneBackground(animation: _controller),
+            content,
+          ],
+        ),
       ),
     );
   }
