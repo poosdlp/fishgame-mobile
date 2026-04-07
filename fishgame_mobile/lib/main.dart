@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,9 +29,9 @@ class MyApp extends StatelessWidget {
         //
         // This works for code too, not just values: Most code changes can be
         // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const ScanCodePage(),
     );
   }
 }
@@ -63,7 +64,7 @@ class _MyHomePageState extends State<MyHomePage> {
       // so that the display can reflect the updated values. If we changed
       // _counter without calling setState(), then the build method would not be
       // called again, and so nothing would appear to happen.
-      _counter--;
+      _counter++;
     });
   }
 
@@ -102,7 +103,7 @@ class _MyHomePageState extends State<MyHomePage> {
           // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
           // action in the IDE, or press "p" in the console), to see the
           // wireframe for each widget.
-          mainAxisAlignment: .center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text('You have pushed the button this many times:'),
             Text(
@@ -116,6 +117,41 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: _incrementCounter,
         tooltip: 'Increment',
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+
+}
+
+
+
+class ScanCodePage extends StatefulWidget {
+  const ScanCodePage({super.key});
+
+  @override
+  State<ScanCodePage> createState() => _ScanCodePageState();
+}
+
+class _ScanCodePageState extends State<ScanCodePage> {
+  @override
+  Widget build(BuildContext context){
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('She pills on my ates'),
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.popAndPushNamed(context, "/generate");
+            },
+            icon: const Icon(
+              Icons.qr_code,
+            ),
+          ),
+        ],
+      ),
+      body: MobileScanner(
+        onDetect: (capture) {},
       ),
     );
   }
