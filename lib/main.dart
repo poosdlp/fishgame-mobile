@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'screens/game.dart';
 import 'screens/license_created.dart';
-import 'screens/log_in.dart';
 import 'screens/sign_in.dart';
 
 void main() {
@@ -16,9 +15,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      initialRoute: '/login',
+      initialRoute: '/signup',
       routes: {
-        '/login': (context) => const LogIn(),
         '/signup': (context) => const SignUp(),
         '/license-created': (context) => const LicenseCreatedScreen(),
         '/game': (context) => const Game(),
