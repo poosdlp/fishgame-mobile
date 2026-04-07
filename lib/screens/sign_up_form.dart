@@ -28,36 +28,48 @@ class _SignUpFormState extends State<SignUpForm> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
+Future<void> _submit() async {
+  FocusScope.of(context).unfocus();
+  debugPrint('Sign up submit pressed');
 
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  if (!_formKey.currentState!.validate()) {
+    debugPrint('Sign up form validation failed');
+    return;
+  }
 
-    setState(() => _isSubmitting = true);
+  setState(() => _isSubmitting = true);
 
-    final result = await _authService.register(
-      username: _usernameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
+  final result = await _authService.register(
+    username: _usernameController.text.trim(),
+    email: _emailController.text.trim(),
+    password: _passwordController.text,
+  );
+
+  debugPrint(
+    'Sign up result: success=${result.success}, message=${result.message}',
+  );
+
+  if (!mounted) return;
+
+  setState(() => _isSubmitting = false);
+
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(content: Text(result.message)),
     );
 
+  if (result.success) {
+    await Future<void>.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
-
-    setState(() => _isSubmitting = false);
-
-    if (!result.success) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text(result.message)),
-        );
-      return;
-    }
-
     Navigator.pushReplacementNamed(context, '/license-created');
   }
+
+  await Future<void>.delayed(const Duration(milliseconds: 700));
+  if (!mounted) return;
+
+  Navigator.pushReplacementNamed(context, '/license-created');
+}
 
   @override
   Widget build(BuildContext context) {

@@ -142,7 +142,7 @@ class WaterScenePainter extends CustomPainter {
     required Color color,
   }) {
     final bodyPaint = Paint()..color = color;
-    final finPaint = Paint()..color = Color.fromARGB(204, color.red, color.green, color.blue);
+    final finPaint = Paint()..color = Color.fromARGB(204, (color.r * 255.0).round().clamp(0, 255), (color.g * 255.0).round().clamp(0, 255), (color.b * 255.0).round().clamp(0, 255));
     final eyePaint = Paint()..color = Colors.black;
 
     canvas.save();

@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class AuthResult {
@@ -15,7 +15,7 @@ class AuthResult {
 }
 
 class AuthService {
-  static const String baseUrl = 'http://10.0.2.2:3000';
+  static const String baseUrl = 'http://10.0.2.2:8000/api';
 
   static Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
@@ -25,15 +25,26 @@ class AuthService {
     required String password,
   }) async {
     try {
-      final response = await http.post(
-        _uri('/auth/register'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': username,
-          'email': email,
-          'password': password,
-        }),
-      );
+      final uri = _uri('/auth/register');
+      final payload = {
+        'username': username,
+        'email': email,
+        'password': password,
+      };
+
+      debugPrint('REGISTER url=$uri');
+      debugPrint('REGISTER body=${jsonEncode(payload)}');
+
+      final response = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('REGISTER status=${response.statusCode}');
+      debugPrint('REGISTER response=${response.body}');
 
       final data = _decodeBody(response.body);
       final message = data['message']?.toString() ?? 'Unable to create account';
@@ -42,10 +53,13 @@ class AuthService {
         success: response.statusCode == 201,
         message: message,
       );
-    } catch (_) {
-      return const AuthResult(
+    } catch (e, st) {
+      debugPrint('REGISTER exception=$e');
+      debugPrintStack(stackTrace: st);
+
+      return AuthResult(
         success: false,
-        message: 'Could not connect to the backend',
+        message: 'Could not connect to the backend: $e',
       );
     }
   }
@@ -55,14 +69,25 @@ class AuthService {
     required String password,
   }) async {
     try {
-      final response = await http.post(
-        _uri('/auth/login'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
-      );
+      final uri = _uri('/auth/login');
+      final payload = {
+        'email': email,
+        'password': password,
+      };
+
+      debugPrint('LOGIN url=$uri');
+      debugPrint('LOGIN body=${jsonEncode(payload)}');
+
+      final response = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('LOGIN status=${response.statusCode}');
+      debugPrint('LOGIN response=${response.body}');
 
       final data = _decodeBody(response.body);
       final accessToken = data['accessToken']?.toString();
@@ -74,18 +99,19 @@ class AuthService {
             : (data['message']?.toString() ?? 'Unable to log in'),
         accessToken: accessToken,
       );
-    } catch (_) {
-      return const AuthResult(
+    } catch (e, st) {
+      debugPrint('LOGIN exception=$e');
+      debugPrintStack(stackTrace: st);
+
+      return AuthResult(
         success: false,
-        message: 'Could not connect to the backend',
+        message: 'Could not connect to the backend: $e',
       );
     }
   }
 
   Map<String, dynamic> _decodeBody(String body) {
-    if (body.isEmpty) {
-      return <String, dynamic>{};
-    }
+    if (body.isEmpty) return <String, dynamic>{};
 
     try {
       final decoded = jsonDecode(body);
