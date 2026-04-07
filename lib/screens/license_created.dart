@@ -72,7 +72,7 @@ class _LicenseCreatedScreenState extends State<LicenseCreatedScreen>
                         onPressed: () {
                           Navigator.pushNamedAndRemoveUntil(
                             context,
-                            '/signup',
+                            '/login',
                             (route) => false,
                           );
                         },
