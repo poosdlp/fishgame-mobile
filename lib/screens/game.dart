@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class Game extends StatefulWidget {
@@ -9,94 +11,75 @@ class Game extends StatefulWidget {
 
 class _GameState extends State<Game> with SingleTickerProviderStateMixin {
   double progress = 0.3;
-  late AnimationController _barController;
+  late final AnimationController _zoneController;
 
   @override
   void initState() {
     super.initState();
-    _barController = AnimationController(
+    _zoneController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _barController.dispose();
+    _zoneController.dispose();
     super.dispose();
-  }
-
-  void _toggleBarMovement() {
-    if (_barController.isAnimating) {
-      _barController.stop();
-    } else {
-      _barController.repeat(reverse: true);
-    }
-    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    
-    final size = MediaQuery.of(context).size;
-    final double sw = size.width;
-    final double sh = size.height;
+    final media = MediaQuery.of(context);
+    final size = media.size;
+    final sw = size.width;
+    final sh = size.height;
 
-    final double containerLeft = sw * 0.1;
-    final double containerTop = sh * 0.05;
-    final double containerWidth = sw * 0.8;
-    final double containerHeight = sh * 0.1;
+    final horizontalPadding = sw * 0.08;
 
-    final double gameBarWidth = sw * 0.8;
-    final double gameBarHeight = sh * 0.04;
-    final double innerBarHeight = gameBarHeight * (9 / 11);
+    final meterOuterHeight = sh * 0.7;
+    final meterOuterWidth = math.max(54.0, sw * 0.16);
+    final meterPadding = math.max(6.0, meterOuterWidth * 0.09);
 
-    final double movingBarWidth = gameBarWidth * 0.35;
+    final meterInnerWidth = meterOuterWidth - (meterPadding * 2);
+    final meterInnerHeight = meterOuterHeight - (meterPadding * 2);
 
-    final double minBarLeft = gameBarWidth * (1 / 31);
-    final double maxBarLeft = gameBarWidth - minBarLeft - movingBarWidth;
+    final greenZoneHeight = meterInnerHeight * 0.28;
+    final yellowZoneHeight = greenZoneHeight * 0.55;
+    final redZoneHeight = yellowZoneHeight * 0.45;
+    final maxTravel = math.max(0.0, meterInnerHeight - greenZoneHeight);
 
-    // 🔹 NEW WIDTHS (layered effect)
-    final double greenWidth = movingBarWidth;
-    final double yellowWidth = movingBarWidth * 0.75;
-    final double redWidth = movingBarWidth * 0.45;
-
-    // final double fishWidth = redWidth*0.6;
-    // final double fishHeight = innerBarHeight;
+    final progressContainerWidth = sw * 0.82;
+    final progressContainerHeight = (sh * 0.1);
+    final bottomGap = (sh * 0.008).clamp(2.0, 8.0);
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ColoredBox(
-              color: Colors.green[50] ?? Colors.green,
-            ),
-          ),
-
-          // Top progress bar
-          Positioned(
-            left: containerLeft,
-            top: containerTop,
-            child: SizedBox(
-              width: containerWidth,
-              height: containerHeight,
+      backgroundColor: const Color(0xFF0B3D2E),
+      body: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Column(
+          children: [
+            SizedBox(height: sh*0.05),
+            SizedBox(
+              width: progressContainerWidth,
+              height: progressContainerHeight,
               child: Stack(
                 children: [
-                  Image.asset(
-                    "assets/progress_container.png",
-                    width: containerWidth,
-                    height: containerHeight,
-                    fit: BoxFit.fill,
+                  Positioned.fill(
+                    child: Image.asset(
+                      'assets/progress_container.png',
+                      fit: BoxFit.fill,
+                    ),
                   ),
                   Positioned(
-                    left: containerWidth * (1 / 31),
-                    top: containerHeight * (9 / 16),
+                    left: progressContainerWidth * (1 / 31),
+                    top: progressContainerHeight * (9 / 16),
                     child: ClipRect(
                       child: SizedBox(
-                        width: (containerWidth * (15 / 16)) * progress,
-                        height: containerHeight * (5 / 16),
+                        width: (progressContainerWidth * (15 / 16)) * progress,
+                        height: progressContainerHeight * (5 / 16),
                         child: Image.asset(
-                          "assets/progress.png",
+                          'assets/progress.png',
                           fit: BoxFit.fill,
                         ),
                       ),
@@ -105,68 +88,76 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
                 ],
               ),
             ),
-          ),
-
-          // Game bar container + moving stack
-          Positioned(
-            top: containerTop + sh * 0.12,
-            left: containerLeft,
-            child: SizedBox(
-              width: gameBarWidth,
-              height: gameBarHeight,
-              child: Stack(
+            SizedBox(height: sh*0.05),
+            SizedBox(
+              height: meterOuterHeight,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    'assets/game_bar_container.png',
-                    width: gameBarWidth,
-                    height: gameBarHeight,
-                    fit: BoxFit.fill,
+                  SizedBox(
+                    width: meterOuterWidth,
+                    height: meterOuterHeight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x55000000),
+                            blurRadius: 10,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(meterPadding),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: AnimatedBuilder(
+                              animation: _zoneController,
+                              builder: (context, child) {
+                                final topOffset = (_zoneController.value * maxTravel)
+                                    .clamp(0.0, maxTravel);
+                                return Stack(
+                                  children: [
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      top: topOffset,
+                                      child: child!,
+                                    ),
+                                  ],
+                                );
+                              },
+                              child: _AccuracyZone(
+                                width: meterInnerWidth,
+                                greenHeight: greenZoneHeight,
+                                yellowHeight: yellowZoneHeight,
+                                redHeight: redZoneHeight,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-
-                  Positioned(
-                    left: minBarLeft,
-                    top: (gameBarHeight - innerBarHeight) / 2,
-                    child: AnimatedBuilder(
-                      animation: _barController,
-                      builder: (context, child) {
-                        final double dx =
-                            (maxBarLeft - minBarLeft) * _barController.value;
-
-                        return Transform.translate(
-                          offset: Offset(dx, 0),
-                          child: child,
-                        );
-                      },
-                      child: SizedBox(
-                        width: movingBarWidth,
-                        height: innerBarHeight,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            //Green
-                            Image.asset(
-                              'assets/green_bar.png',
-                              width: greenWidth,
-                              height: innerBarHeight,
-                              fit: BoxFit.fill,
-                            ),
-
-                            //Yellow
-                            Image.asset(
-                              'assets/yellow_bar.png',
-                              width: yellowWidth,
-                              height: innerBarHeight,
-                              fit: BoxFit.fill,
-                            ),
-
-                            //Red
-                            Image.asset(
-                              'assets/red_bar.png',
-                              width: redWidth,
-                              height: innerBarHeight,
-                              fit: BoxFit.fill,
-                            ),
-                          ],
+                  SizedBox(width: sw * 0.08),
+                  Expanded(
+                    child: SizedBox(
+                      height: meterOuterHeight,
+                      child: Center(
+                        child: Text(
+                          'Fishing Reel Meter\n\nRed = best timing\nYellow = good timing\nGreen = low-score timing\nWhite = miss zone',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Colors.white,
+                                height: 1.25,
+                                fontWeight: FontWeight.w600,
+                              ),
                         ),
                       ),
                     ),
@@ -174,35 +165,71 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
                 ],
               ),
             ),
-          ),
-          
-          // Button
-          Positioned(
-            top: containerTop + sh * 0.12 + gameBarHeight + 20,
-            left: containerLeft,
-            child: SizedBox(
-              width: gameBarWidth,
-              child: ElevatedButton(
-                onPressed: _toggleBarMovement,
-                child: Text(_barController.isAnimating ? 'Stop' : 'Start'),
+            SizedBox(height: bottomGap),
+            Expanded(
+              child: Center(
+                child: Slider(
+                  value: progress,
+                  min: 0,
+                  max: 1,
+                  onChanged: (value) {
+                    setState(() {
+                      progress = value;
+                    });
+                  },
+                ),
               ),
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-          // Slider
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: Slider(
-              value: progress,
-              min: 0.0,
-              max: 1.0,
-              onChanged: (value) {
-                setState(() {
-                  progress = value;
-                });
-              },
+class _AccuracyZone extends StatelessWidget {
+  const _AccuracyZone({
+    required this.width,
+    required this.greenHeight,
+    required this.yellowHeight,
+    required this.redHeight,
+  });
+
+  final double width;
+  final double greenHeight;
+  final double yellowHeight;
+  final double redHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: greenHeight,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: double.infinity,
+            height: greenHeight,
+            decoration: BoxDecoration(
+              color: const Color(0xFF23C552),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            height: yellowHeight,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD54F),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            height: redHeight,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE53935),
+              borderRadius: BorderRadius.circular(3),
             ),
           ),
         ],
