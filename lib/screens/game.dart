@@ -16,6 +16,10 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
   late final Ticker _fishTicker;
 
   bool _isPressing = false;
+  bool _gameStarted = false;
+  bool _gameEnded = false;
+  bool _dialogShowing = false;
+
   Duration? _lastTick;
 
   double _fishTop = 0;
@@ -43,7 +47,8 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
     )
       ..addListener(() {
         final maxTravel = math.max(0.0, _meterInnerHeight - _greenZoneHeight);
-        _currentZoneTop = (_zoneController.value * maxTravel).clamp(0.0, maxTravel);
+        _currentZoneTop =
+            (_zoneController.value * maxTravel).clamp(0.0, maxTravel);
       })
       ..repeat(reverse: true);
 
@@ -51,7 +56,7 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
   }
 
   void _onFishTick(Duration elapsed) {
-    if (!mounted) return;
+    if (!mounted || !_gameStarted || _gameEnded) return;
 
     final last = _lastTick;
     _lastTick = elapsed;
@@ -94,18 +99,89 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
 
     final nextProgress = (progress + (progressRate * dt)).clamp(0.0, 1.0);
 
-    if ((nextFishTop - _fishTop).abs() > 0.01 || (nextProgress - progress).abs() > 0.0005) {
+    if ((nextFishTop - _fishTop).abs() > 0.01 ||
+        (nextProgress - progress).abs() > 0.0005) {
       setState(() {
         _fishTop = nextFishTop;
         progress = nextProgress;
       });
     }
+
+    if (nextProgress <= 0.0) {
+      _endGame('You lose');
+    } else if (nextProgress >= 1.0) {
+      _endGame('You win');
+    }
   }
 
   void _setPressing(bool value) {
+    if (!_gameStarted || _gameEnded) return;
     if (_isPressing == value) return;
     setState(() {
       _isPressing = value;
+    });
+  }
+
+  void _startGame() {
+    final maxFishTop = math.max(0.0, _meterInnerHeight - _fishSize);
+    setState(() {
+      progress = 0.3;
+      _gameStarted = true;
+      _gameEnded = false;
+      _dialogShowing = false;
+      _isPressing = false;
+      _fishTop = maxFishTop / 2;
+      _lastTick = null;
+    });
+  }
+
+  void _endGame(String message) {
+    if (_gameEnded || _dialogShowing || !mounted) return;
+
+    setState(() {
+      _gameEnded = true;
+      _dialogShowing = true;
+      _isPressing = false;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _startGame();
+                },
+                child: const Text('Play Again'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/login',
+                    (route) => false,
+                  );
+                },
+                child: const Text('Back to Log In'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _dialogShowing = false;
+        });
+      }
     });
   }
 
@@ -166,147 +242,218 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
         onPointerDown: (_) => _setPressing(true),
         onPointerUp: (_) => _setPressing(false),
         onPointerCancel: (_) => _setPressing(false),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-          child: Column(
-            children: [
-              SizedBox(height: safeTop),
-              SizedBox(
-                width: progressContainerWidth,
-                height: progressContainerHeight,
-                child: Stack(
+        child: Stack(
+          children: [
+            if (_gameStarted) ...[
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: Column(
                   children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        'assets/progress_container.png',
-                        fit: BoxFit.fill,
-                      ),
-                    ),
-                    Positioned(
-                      left: progressContainerWidth * (1 / 31),
-                      top: progressContainerHeight * (9 / 16),
-                      child: ClipRect(
-                        child: SizedBox(
-                          width: (progressContainerWidth * (15 / 16)) * progress,
-                          height: progressContainerHeight * (5 / 16),
-                          child: Image.asset(
-                            'assets/progress.png',
-                            fit: BoxFit.fill,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: topGap),
-              SizedBox(
-                height: meterOuterHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
+                    SizedBox(height: safeTop),
                     SizedBox(
-                      width: meterOuterWidth,
-                      height: meterOuterHeight,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x55000000),
-                              blurRadius: 10,
-                              offset: Offset(0, 6),
+                      width: progressContainerWidth,
+                      height: progressContainerHeight,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Image.asset(
+                              'assets/progress_container.png',
+                              fit: BoxFit.fill,
                             ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.all(meterPadding),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          Positioned(
+                            left: progressContainerWidth * (1 / 31),
+                            top: progressContainerHeight * (9 / 16),
+                            child: ClipRect(
+                              child: SizedBox(
+                                width:
+                                    (progressContainerWidth * (15 / 16)) * progress,
+                                height: progressContainerHeight * (5 / 16),
+                                child: Image.asset(
+                                  'assets/progress.png',
+                                  fit: BoxFit.fill,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: topGap),
+                    SizedBox(
+                      height: meterOuterHeight,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: meterOuterWidth,
+                            height: meterOuterHeight,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Stack(
-                                children: [
-                                  AnimatedBuilder(
-                                    animation: _zoneController,
-                                    builder: (context, child) {
-                                      final topOffset =
-                                          (_zoneController.value * maxTravel)
-                                              .clamp(0.0, maxTravel);
-                                      _currentZoneTop = topOffset;
-                                      return Stack(
-                                        children: [
-                                          Positioned(
-                                            left: 0,
-                                            right: 0,
-                                            top: topOffset,
-                                            child: child!,
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                    child: _AccuracyZone(
-                                      width: meterInnerWidth,
-                                      greenHeight: greenZoneHeight,
-                                      yellowHeight: yellowZoneHeight,
-                                      redHeight: redZoneHeight,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    left: (meterInnerWidth - fishWidth) / 2,
-                                    top: _fishTop,
-                                    child: _PixelFishSprite(
-                                      width: fishWidth,
-                                      height: fishHeight,
-                                    ),
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x55000000),
+                                    blurRadius: 10,
+                                    offset: Offset(0, 6),
                                   ),
                                 ],
                               ),
+                              child: Padding(
+                                padding: EdgeInsets.all(meterPadding),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        AnimatedBuilder(
+                                          animation: _zoneController,
+                                          builder: (context, child) {
+                                            final topOffset =
+                                                (_zoneController.value * maxTravel)
+                                                    .clamp(0.0, maxTravel);
+                                            _currentZoneTop = topOffset;
+                                            return Stack(
+                                              children: [
+                                                Positioned(
+                                                  left: 0,
+                                                  right: 0,
+                                                  top: topOffset,
+                                                  child: child!,
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                          child: _AccuracyZone(
+                                            width: meterInnerWidth,
+                                            greenHeight: greenZoneHeight,
+                                            yellowHeight: yellowZoneHeight,
+                                            redHeight: redZoneHeight,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          left: (meterInnerWidth - fishWidth) / 2,
+                                          top: _fishTop,
+                                          child: _PixelFishSprite(
+                                            width: fishWidth,
+                                            height: fishHeight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          SizedBox(width: sw * 0.08),
+                          Expanded(
+                            child: SizedBox(
+                              height: meterOuterHeight,
+                              child: Center(
+                                child: Text(
+                                  'Fishing Reel Meter\n\nHold screen = fish rises\nRelease = fish falls\nRed = best timing\nYellow = good timing\nGreen = low-score timing\nWhite = miss zone',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        height: 1.25,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(width: sw * 0.08),
+                    SizedBox(height: bottomGap),
                     Expanded(
-                      child: SizedBox(
-                        height: meterOuterHeight,
-                        child: Center(
-                          child: Text(
-                            'Fishing Reel Meter\n\nHold screen = fish rises\nRelease = fish falls\nRed = best timing\nYellow = good timing\nGreen = low-score timing\nWhite = miss zone',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.white,
-                                  height: 1.25,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
+                      child: Center(
+                        child: Slider(
+                          value: progress,
+                          min: 0,
+                          max: 1,
+                          onChanged: (value) {
+                            setState(() {
+                              progress = value;
+                            });
+                          },
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              SizedBox(height: bottomGap),
-              Expanded(
-                child: Center(
-                  child: Slider(
-                    value: progress,
-                    min: 0,
-                    max: 1,
-                    onChanged: (value) {
-                      setState(() {
-                        progress = value;
-                      });
-                    },
+              Positioned(
+                top: safeTop + 8,
+                left: 12,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/login',
+                      (route) => false,
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Log In'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xCC000000),
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ),
+            ] else ...[
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Start to play',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _startGame,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0B3D2E),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 16,
+                        ),
+                      ),
+                      child: const Text('Start'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          '/login',
+                          (route) => false,
+                        );
+                      },
+                      child: const Text(
+                        'Back to Log In',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
