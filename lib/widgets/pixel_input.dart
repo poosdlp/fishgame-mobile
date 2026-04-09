@@ -5,20 +5,25 @@ class PixelInput extends StatelessWidget {
   final TextEditingController controller;
   final TextInputType? keyboardType;
   final bool obscureText;
-  final String? Function(String?)? validator;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
   const PixelInput({
     super.key,
     required this.controller,
     this.keyboardType,
     this.obscureText = false,
-    this.validator,
+    this.errorText,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final textStyle =
         GoogleFonts.pixelifySans(fontSize: 16, color: Colors.black);
+
+    final errorStyle =
+        GoogleFonts.pixelifySans(fontSize: 14, color: Colors.black);
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -34,11 +39,13 @@ class PixelInput extends StatelessWidget {
             keyboardType: keyboardType,
             obscureText: obscureText,
             style: textStyle,
-            validator: validator,
-            decoration: const InputDecoration(
+            onChanged: onChanged,
+            decoration: InputDecoration(
               border: InputBorder.none,
               contentPadding:
-                  EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              errorText: errorText,
+              errorStyle: errorStyle,
             ),
           ),
         ),

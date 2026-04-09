@@ -5,70 +5,61 @@ import '../services/auth_service.dart';
 import '../widgets/auth_form_buttons.dart';
 import '../widgets/labeled_pixel_input.dart';
 
-class SignUpForm extends StatefulWidget {
-  const SignUpForm({super.key});
+class LogInForm extends StatefulWidget {
+  const LogInForm({super.key});
 
   @override
-  State<SignUpForm> createState() => _SignUpFormState();
+  State<LogInForm> createState() => _LogInFormState();
 }
 
-class _SignUpFormState extends State<SignUpForm> {
-  final _usernameController = TextEditingController();
+class _LogInFormState extends State<LogInForm> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
 
   bool _isSubmitting = false;
-  String? _usernameError;
   String? _emailError;
   String? _passwordError;
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   bool _validateFields() {
-    bool isValid = true;
+    bool valid = true;
 
     setState(() {
-      _usernameError = null;
       _emailError = null;
       _passwordError = null;
 
-      if (_usernameController.text.trim().isEmpty) {
-        _usernameError = 'Username is required';
-        isValid = false;
-      }
-
       if (_emailController.text.trim().isEmpty) {
-        _emailError = 'Email is required';
-        isValid = false;
+        _emailError = 'Enter an email';
+        valid = false;
       }
 
       if (_passwordController.text.isEmpty) {
-        _passwordError = 'Password is required';
-        isValid = false;
+        _passwordError = 'Enter a password';
+        valid = false;
       }
     });
 
-    return isValid;
+    return valid;
   }
 
-  Future<void> _showErrorDialog(String message) async {
+  Future<void> _showDialog(String message) async {
     if (!mounted) return;
 
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Up Error'),
+      builder: (_) => AlertDialog(
+        title: const Text('Login Error'),
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
           ),
         ],
@@ -83,8 +74,7 @@ class _SignUpFormState extends State<SignUpForm> {
 
     setState(() => _isSubmitting = true);
 
-    final result = await _authService.register(
-      username: _usernameController.text.trim(),
+    final result = await _authService.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
@@ -94,41 +84,20 @@ class _SignUpFormState extends State<SignUpForm> {
     setState(() => _isSubmitting = false);
 
     if (result.success) {
-      Navigator.pushReplacementNamed(context, '/license-created');
+      Navigator.pushReplacementNamed(context, '/home');
       return;
     }
 
-    final normalizedMessage = result.message.toLowerCase();
+    final msg = result.message.toLowerCase();
 
-    if (normalizedMessage.contains('user already exists')) {
+    if (msg.contains('invalid')) {
       setState(() {
-        _usernameError = 'User already exists';
+        _passwordError = 'Invalid email or password';
       });
       return;
     }
 
-    if (normalizedMessage.contains('username')) {
-      setState(() {
-        _usernameError = result.message;
-      });
-      return;
-    }
-
-    if (normalizedMessage.contains('email')) {
-      setState(() {
-        _emailError = result.message;
-      });
-      return;
-    }
-
-    if (normalizedMessage.contains('password')) {
-      setState(() {
-        _passwordError = result.message;
-      });
-      return;
-    }
-
-    await _showErrorDialog(result.message);
+    await _showDialog(result.message);
   }
 
   @override
@@ -159,28 +128,13 @@ class _SignUpFormState extends State<SignUpForm> {
               left: sw * 0.1,
               right: sw * 0.1,
             ),
-            child: Text(
-              'GET YOUR\nFISHING LICENSE',
-              style: titleStyle,
-            ),
-          ),
-          LabeledPixelInput(
-            label: 'Username',
-            controller: _usernameController,
-            sw: sw,
-            topPadding: sh * 0.1,
-            errorText: _usernameError,
-            onChanged: (_) {
-              if (_usernameError != null) {
-                setState(() => _usernameError = null);
-              }
-            },
+            child: Text('LOG IN', style: titleStyle),
           ),
           LabeledPixelInput(
             label: 'Email',
             controller: _emailController,
             sw: sw,
-            topPadding: sh * 0.05,
+            topPadding: sh * 0.1,
             keyboardType: TextInputType.emailAddress,
             errorText: _emailError,
             onChanged: (_) {

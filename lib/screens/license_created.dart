@@ -72,11 +72,11 @@ class _LicenseCreatedScreenState extends State<LicenseCreatedScreen>
                         onPressed: () {
                           Navigator.pushNamedAndRemoveUntil(
                             context,
-                            '/login',
+                            '/home',
                             (route) => false,
                           );
                         },
-                        child: const Text('Back to Log In'),
+                        child: const Text('Back to Home Screen'),
                       ),
                     ],
                   ),
