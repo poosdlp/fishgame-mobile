@@ -363,12 +363,12 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
                                     onPressed: () {
                                       Navigator.pushNamedAndRemoveUntil(
                                         context,
-                                        '/login',
+                                        '/home',
                                         (route) => false,
                                       );
                                     },
                                     icon: const Icon(Icons.arrow_back),
-                                    label: const Text('Log In'),
+                                    label: const Text('Back to home'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xCC000000),
                                       foregroundColor: Colors.white,
@@ -444,12 +444,12 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
                       onPressed: () {
                         Navigator.pushNamedAndRemoveUntil(
                           context,
-                          '/login',
+                          '/home',
                           (route) => false,
                         );
                       },
                       child: const Text(
-                        'Back to Log In',
+                        'Back to Home',
                         style: TextStyle(color: Colors.white),
                       ),
                     ),

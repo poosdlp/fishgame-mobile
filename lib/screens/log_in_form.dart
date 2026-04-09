@@ -28,6 +28,12 @@ class _LogInFormState extends State<LogInForm> {
     super.dispose();
   }
 
+  bool _isValidEmail(String email) {
+    final trimmed = email.trim();
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(trimmed);
+  }
+
   bool _validateFields() {
     bool valid = true;
 
@@ -35,12 +41,18 @@ class _LogInFormState extends State<LogInForm> {
       _emailError = null;
       _passwordError = null;
 
-      if (_emailController.text.trim().isEmpty) {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      if (email.isEmpty) {
         _emailError = 'Enter an email';
+        valid = false;
+      } else if (!_isValidEmail(email)) {
+        _emailError = 'Enter a valid email';
         valid = false;
       }
 
-      if (_passwordController.text.isEmpty) {
+      if (password.isEmpty) {
         _passwordError = 'Enter a password';
         valid = false;
       }
@@ -90,7 +102,7 @@ class _LogInFormState extends State<LogInForm> {
 
     final msg = result.message.toLowerCase();
 
-    if (msg.contains('invalid')) {
+    if (msg.contains('invalid credentials')) {
       setState(() {
         _passwordError = 'Invalid email or password';
       });

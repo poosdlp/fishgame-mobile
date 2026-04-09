@@ -31,6 +31,17 @@ class _SignUpFormState extends State<SignUpForm> {
     super.dispose();
   }
 
+  bool _isValidEmail(String email) {
+    final trimmed = email.trim();
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(trimmed);
+  }
+
+  bool _isValidUsername(String username) {
+    final usernameRegex = RegExp(r'^[A-Za-z0-9_]+$');
+    return usernameRegex.hasMatch(username);
+  }
+
   bool _validateFields() {
     bool isValid = true;
 
@@ -39,18 +50,43 @@ class _SignUpFormState extends State<SignUpForm> {
       _emailError = null;
       _passwordError = null;
 
-      if (_usernameController.text.trim().isEmpty) {
+      final username = _usernameController.text.trim();
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      if (username.isEmpty) {
         _usernameError = 'Username is required';
         isValid = false;
-      }
-
-      if (_emailController.text.trim().isEmpty) {
-        _emailError = 'Email is required';
+      } else if (username.length < 3) {
+        _usernameError = 'Username must be at least 3 characters';
+        isValid = false;
+      } else if (username.length > 20) {
+        _usernameError = 'Username must be 20 characters or less';
+        isValid = false;
+      } else if (!_isValidUsername(username)) {
+        _usernameError = 'Use only letters, numbers, and underscores';
         isValid = false;
       }
 
-      if (_passwordController.text.isEmpty) {
+      if (email.isEmpty) {
+        _emailError = 'Email is required';
+        isValid = false;
+      } else if (!_isValidEmail(email)) {
+        _emailError = 'Enter a valid email';
+        isValid = false;
+      }
+
+      if (password.isEmpty) {
         _passwordError = 'Password is required';
+        isValid = false;
+      } else if (password.length < 8) {
+        _passwordError = 'Password must be at least 8 characters';
+        isValid = false;
+      } else if (!RegExp(r'[A-Za-z]').hasMatch(password)) {
+        _passwordError = 'Password must include at least 1 letter';
+        isValid = false;
+      } else if (!RegExp(r'\d').hasMatch(password)) {
+        _passwordError = 'Password must include at least 1 number';
         isValid = false;
       }
     });
@@ -102,7 +138,7 @@ class _SignUpFormState extends State<SignUpForm> {
 
     if (normalizedMessage.contains('user already exists')) {
       setState(() {
-        _usernameError = 'User already exists';
+        _emailError = 'An account with this email already exists';
       });
       return;
     }
