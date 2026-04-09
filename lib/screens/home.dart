@@ -4,8 +4,35 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../widgets/fish_background_screen.dart';
 
-class Home extends StatelessWidget {
+class Home extends StatefulWidget {
   const Home({super.key});
+
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  late Future<AuthUser?> _currentUserFuture;
+  final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSession();
+  }
+
+  void _loadSession() {
+    _currentUserFuture = _authService.getCurrentUser();
+  }
+
+  Future<void> _logout() async {
+    await _authService.logout();
+    if (!mounted) return;
+
+    setState(() {
+      _loadSession();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +59,15 @@ class Home extends StatelessWidget {
       ],
     );
 
+    final usernameStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.065,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFFFFD54F),
+      shadows: const [
+        Shadow(color: Color(0xA0000000), offset: Offset(2, 2), blurRadius: 0),
+      ],
+    );
+
     final buttonLabelStyle = GoogleFonts.pixelifySans(
       fontSize: sw * 0.05,
       fontWeight: FontWeight.w600,
@@ -40,6 +76,12 @@ class Home extends StatelessWidget {
 
     final smallStyle = GoogleFonts.pixelifySans(
       fontSize: sw * 0.032,
+      fontWeight: FontWeight.w600,
+      color: Colors.white,
+    );
+
+    final smallLogoutStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.036,
       fontWeight: FontWeight.w600,
       color: Colors.white,
     );
@@ -53,30 +95,61 @@ class Home extends StatelessWidget {
           child: Column(
             children: [
               SizedBox(height: sh * 0.02),
-              Align(
-                alignment: Alignment.topRight,
-                child: SizedBox(
-                  height: 36,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pushNamed(context, '/game'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5D4037),
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: sw * 0.04),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: const BorderSide(
-                          color: Colors.orangeAccent,
-                          width: 2,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  SizedBox(
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pushNamed(context, '/game'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5D4037),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: sw * 0.04),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: const BorderSide(
+                            color: Colors.orangeAccent,
+                            width: 2,
+                          ),
                         ),
                       ),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('DEV PLAY', style: smallStyle),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('DEV PLAY', style: smallStyle),
+                      ),
                     ),
                   ),
-                ),
+                  FutureBuilder<AuthUser?>(
+                    future: _currentUserFuture,
+                    builder: (context, snapshot) {
+                      final user = snapshot.data;
+                      if (user == null || user.username.isEmpty) {
+                        return const SizedBox(width: 90);
+                      }
+
+                      return SizedBox(
+                        height: 42,
+                        child: ElevatedButton(
+                          onPressed: _logout,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xCC1A237E),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(horizontal: sw * 0.04),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Colors.white, width: 2),
+                            ),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Log Out', style: smallLogoutStyle),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               SizedBox(height: sh * 0.03),
               Text(
@@ -119,17 +192,49 @@ class Home extends StatelessWidget {
               ),
               const Spacer(),
               FutureBuilder<AuthUser?>(
-                future: AuthService().getCurrentUser(),
+                future: _currentUserFuture,
                 builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: sh * 0.05),
+                      child: Column(
+                        children: [
+                          const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: sh * 0.02),
+                          Text(
+                            'Checking session...',
+                            textAlign: TextAlign.center,
+                            style: messageStyle,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
                   final user = snapshot.data;
 
                   if (user != null && user.username.isNotEmpty) {
                     return Padding(
                       padding: EdgeInsets.only(bottom: sh * 0.05),
-                      child: Text(
-                        'Good luck fishing ${user.username}',
+                      child: RichText(
                         textAlign: TextAlign.center,
-                        style: messageStyle,
+                        text: TextSpan(
+                          style: messageStyle,
+                          children: [
+                            const TextSpan(text: 'Good luck fishing '),
+                            TextSpan(
+                              text: user.username,
+                              style: usernameStyle,
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }

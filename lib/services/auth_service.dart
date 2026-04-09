@@ -238,6 +238,50 @@ class AuthService {
     }
   }
 
+  Future<AuthResult> logout() async {
+    try {
+      final response = await http
+          .post(
+            _uri('/auth/logout'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('LOGOUT status=${response.statusCode}');
+      debugPrint('LOGOUT response=${response.body}');
+
+      _accessToken = null;
+      _refreshCookie = null;
+      _currentUser = null;
+
+      if (response.statusCode == 200) {
+        final data = _decodeBody(response.body);
+        return AuthResult(
+          success: true,
+          message: data['message']?.toString() ?? 'Logged out',
+        );
+      }
+
+      final data = _decodeBody(response.body);
+      return AuthResult(
+        success: false,
+        message: data['message']?.toString() ?? 'Unable to log out',
+      );
+    } catch (e, st) {
+      debugPrint('LOGOUT exception=$e');
+      debugPrintStack(stackTrace: st);
+
+      _accessToken = null;
+      _refreshCookie = null;
+      _currentUser = null;
+
+      return AuthResult(
+        success: false,
+        message: 'Could not connect to the backend: $e',
+      );
+    }
+  }
+
   static Map<String, String> _authHeaders() {
     final headers = <String, String>{
       'Content-Type': 'application/json',
