@@ -151,7 +151,7 @@ class _HomeState extends State<Home> {
                   ),
                 ],
               ),
-              SizedBox(height: sh * 0.03),
+              SizedBox(height: sh * 0.1),
               Text(
                 'Orlando\nFishing\nAdventure',
                 textAlign: TextAlign.center,
@@ -163,7 +163,7 @@ class _HomeState extends State<Home> {
                 textAlign: TextAlign.center,
                 style: messageStyle,
               ),
-              SizedBox(height: sh * 0.2),
+              SizedBox(height: sh * 0.1),
               SizedBox(
                 width: sw * 0.3,
                 height: sw * 0.3,
@@ -196,7 +196,7 @@ class _HomeState extends State<Home> {
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Padding(
-                      padding: EdgeInsets.only(bottom: sh * 0.05),
+                      padding: EdgeInsets.only(bottom: sh * 0.15),
                       child: Column(
                         children: [
                           const SizedBox(
@@ -222,17 +222,18 @@ class _HomeState extends State<Home> {
 
                   if (user != null && user.username.isNotEmpty) {
                     return Padding(
-                      padding: EdgeInsets.only(bottom: sh * 0.05),
+                      padding: EdgeInsets.only(bottom: sh * 0.15),
                       child: RichText(
                         textAlign: TextAlign.center,
                         text: TextSpan(
                           style: messageStyle,
                           children: [
-                            const TextSpan(text: 'Good luck fishing '),
+                            const TextSpan(text: '"Good luck fishing '),
                             TextSpan(
                               text: user.username,
                               style: usernameStyle,
                             ),
+                            const TextSpan(text: '!"'),
                           ],
                         ),
                       ),
@@ -260,7 +261,7 @@ class _HomeState extends State<Home> {
                           ),
                         ],
                       ),
-                      SizedBox(height: sh * 0.05),
+                      SizedBox(height: sh * 0.15),
                     ],
                   );
                 },
