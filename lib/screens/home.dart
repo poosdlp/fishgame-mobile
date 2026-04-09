@@ -223,18 +223,36 @@ class _HomeState extends State<Home> {
                   if (user != null && user.username.isNotEmpty) {
                     return Padding(
                       padding: EdgeInsets.only(bottom: sh * 0.15),
-                      child: RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: messageStyle,
-                          children: [
-                            const TextSpan(text: '"Good luck fishing '),
-                            TextSpan(
-                              text: user.username,
-                              style: usernameStyle,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          vertical: sh * 0.02,
+                          horizontal: sw * 0.06,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xAA006064), // soft dark blue
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x55000000),
+                              offset: Offset(2, 2),
+                              blurRadius: 6,
                             ),
-                            const TextSpan(text: '!"'),
                           ],
+                        ),
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(
+                            style: messageStyle,
+                            children: [
+                              const TextSpan(text: 'Good luck fishing today '),
+                              TextSpan(
+                                text: user.username,
+                                style: usernameStyle,
+                              ),
+                              const TextSpan(text: '!'),
+                            ],
+                          ),
                         ),
                       ),
                     );

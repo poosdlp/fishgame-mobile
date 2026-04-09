@@ -166,11 +166,11 @@ class _GameState extends State<Game> with TickerProviderStateMixin {
                   Navigator.of(context).pop();
                   Navigator.pushNamedAndRemoveUntil(
                     context,
-                    '/login',
+                    '/home',
                     (route) => false,
                   );
                 },
-                child: const Text('Back to Log In'),
+                child: const Text('Back to home'),
               ),
             ],
           );
