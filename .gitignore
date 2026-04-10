@@ -1,4 +1,11 @@
 #Miscellaneous
+# macOS
+.DS_Store
+
+# IntelliJ / Android Studio
+.idea/
+
+# Miscellaneous
 *.class
 *.log
 *.pyc
