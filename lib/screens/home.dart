@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import '../widgets/QR_Scanner.dart';
 import '../services/auth_service.dart';
 import '../widgets/fish_background_screen.dart';
 
@@ -168,15 +168,12 @@ class _HomeState extends State<Home> {
                 width: sw * 0.3,
                 height: sw * 0.3,
                 child: ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          content: Text('Camera/QR scanning not wired up yet.'),
-                        ),
-                      );
-                  },
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ScanCodePage()),
+                          );
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFBDBDBD),
                     foregroundColor: Colors.white,
