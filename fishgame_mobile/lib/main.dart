@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'accelerometer.dart';
 
 void main() {
   runApp(const MyApp());
@@ -29,9 +30,9 @@ class MyApp extends StatelessWidget {
         //
         // This works for code too, not just values: Most code changes can be
         // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const ScanCodePage(),
+      home: const ScanCodePage(), //home: const //SpeedPage(),
     );
   }
 }
@@ -103,7 +104,7 @@ class _MyHomePageState extends State<MyHomePage> {
           // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
           // action in the IDE, or press "p" in the console), to see the
           // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: .center,
           children: [
             const Text('You have pushed the button this many times:'),
             Text(
@@ -134,12 +135,28 @@ class ScanCodePage extends StatefulWidget {
 }
 
 class _ScanCodePageState extends State<ScanCodePage> {
+  String _scannedValue = '';
+
+  void _onDetect(BarcodeCapture capture) {
+    final barcode = capture.barcodes.firstOrNull;
+    if (barcode?.rawValue == null) return;
+    setState(() {
+      _scannedValue = barcode!.rawValue!;
+    });
+  }
+
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('She pills on my ates'),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SpeedPage()));
+            },
+            icon: const Icon(Icons.speed),
+          ),
           IconButton(
             onPressed: () {
               Navigator.popAndPushNamed(context, "/generate");
@@ -150,8 +167,21 @@ class _ScanCodePageState extends State<ScanCodePage> {
           ),
         ],
       ),
-      body: MobileScanner(
-        onDetect: (capture) {},
+      body: Column(
+        children: [
+          Expanded(
+            child: MobileScanner(
+              onDetect: _onDetect,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              _scannedValue,
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
       ),
     );
   }

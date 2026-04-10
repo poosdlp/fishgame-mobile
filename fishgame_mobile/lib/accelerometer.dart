@@ -11,11 +11,13 @@ class SpeedPage extends StatefulWidget {
 
 class _SpeedPageState extends State<SpeedPage> {
   double _speed = 0.0;
+  bool _isTouching = false;
 
   @override
   void initState() {
     super.initState();
     accelerometerEventStream().listen((event) {
+      if (!_isTouching) return;
       final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       setState(() {
         _speed = (magnitude - 9.8).clamp(0, double.infinity);
@@ -27,12 +29,18 @@ class _SpeedPageState extends State<SpeedPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
-        child: Text(
-          _speed.toStringAsFixed(1),
-          style: const TextStyle(
-            fontSize: 96,
-            color: Colors.black,
+      body: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (_) => setState(() => _isTouching = true),
+        onPointerUp: (_) => setState(() { _isTouching = false; _speed = 0.0; }),
+        onPointerCancel: (_) => setState(() { _isTouching = false; _speed = 0.0; }),
+        child: Center(
+          child: Text(
+            _speed.toStringAsFixed(1),
+            style: const TextStyle(
+              fontSize: 96,
+              color: Colors.black,
+            ),
           ),
         ),
       ),
