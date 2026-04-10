@@ -12,6 +12,9 @@ class SpeedPage extends StatefulWidget {
 class _SpeedPageState extends State<SpeedPage> {
   double _speed = 0.0;
   bool _isTouching = false;
+  bool _thresholdTriggered = false;
+
+  static const double _threshold = 10.0;
 
   @override
   void initState() {
@@ -19,9 +22,22 @@ class _SpeedPageState extends State<SpeedPage> {
     accelerometerEventStream().listen((event) {
       if (!_isTouching) return;
       final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+      final speed = (magnitude - 9.8).clamp(0.0, double.infinity);
       setState(() {
-        _speed = (magnitude - 9.8).clamp(0, double.infinity);
+        _speed = speed;
       });
+      if (speed >= _threshold && !_thresholdTriggered) {
+        _thresholdTriggered = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Speed threshold reached :D'),
+            ),
+          );
+        }
+      } else if (speed < _threshold) {
+        _thresholdTriggered = false;
+      }
     });
   }
 

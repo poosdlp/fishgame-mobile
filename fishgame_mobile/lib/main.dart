@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'accelerometer.dart';
 
 void main() {
@@ -140,9 +141,14 @@ class _ScanCodePageState extends State<ScanCodePage> {
   void _onDetect(BarcodeCapture capture) {
     final barcode = capture.barcodes.firstOrNull;
     if (barcode?.rawValue == null) return;
+    final value = barcode!.rawValue!;
     setState(() {
-      _scannedValue = barcode!.rawValue!;
+      _scannedValue = value;
     });
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme) {
+      launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
