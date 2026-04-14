@@ -3,7 +3,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'accelerometer.dart';
-import 'package:url_launcher/url_launcher.dart' as URLLaucher;
 
 bool truthholder = false;
 class ScanCodePage extends StatefulWidget {
