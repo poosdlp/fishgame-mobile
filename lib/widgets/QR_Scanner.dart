@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'accelerometer.dart';
 
@@ -12,10 +12,20 @@ class ScanCodePage extends StatefulWidget {
   State<ScanCodePage> createState() => _ScanCodePageState();
 }
 
+
+
 class _ScanCodePageState extends State<ScanCodePage> {
   String _scannedValue = '';
-  
   String urlString = '';
+ String _BASE_URL = '';
+  
+  Future QR_Scanner() async {
+ 
+  await dotenv.load(fileName: ".env");
+
+  _BASE_URL = dotenv.get("BASE_URL"); // => "staging-value"
+
+}
 
   void _onDetect(BarcodeCapture capture) {
     final barcode = capture.barcodes.firstOrNull;
@@ -23,9 +33,10 @@ class _ScanCodePageState extends State<ScanCodePage> {
     final value = barcode!.rawValue!;
     setState(() {
       _scannedValue = value;
+      
       //http://{{baseurl}}/api/session/{{sessionToken}}/approve
       if(_scannedValue != ''){
-      urlString = 'http://{{baseurl}}/api/session/$_scannedValue/approve';
+      urlString = 'http://$_BASE_URL/api/session/$_scannedValue/approve';
       truthholder = true;
       } else {
        Text('Speed threshold reached :D');
