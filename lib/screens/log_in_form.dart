@@ -109,6 +109,11 @@ class _LogInFormState extends State<LogInForm> {
       return;
     }
 
+    if (msg.contains('verify your email')) {
+      await _showDialog('Please verify your email before logging in.');
+      return;
+    }
+
     await _showDialog(result.message);
   }
 

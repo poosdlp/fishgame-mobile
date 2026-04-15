@@ -77,15 +77,9 @@ class AuthService {
       final message = data['message']?.toString() ?? 'Unable to create account';
 
       if (response.statusCode == 201) {
-        final loginResult = await login(
-          email: email,
-          password: password,
-        );
-
         return AuthResult(
           success: true,
           message: message,
-          accessToken: loginResult.accessToken,
         );
       }
 

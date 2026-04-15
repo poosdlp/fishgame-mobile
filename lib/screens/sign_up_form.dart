@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../widgets/auth_form_buttons.dart';
 import '../widgets/labeled_pixel_input.dart';
+import 'email_verification.dart';
 
 class SignUpForm extends StatefulWidget {
   const SignUpForm({super.key});
@@ -119,10 +120,13 @@ class _SignUpFormState extends State<SignUpForm> {
 
     setState(() => _isSubmitting = true);
 
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     final result = await _authService.register(
       username: _usernameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
+      email: email,
+      password: password,
     );
 
     if (!mounted) return;
@@ -130,7 +134,15 @@ class _SignUpFormState extends State<SignUpForm> {
     setState(() => _isSubmitting = false);
 
     if (result.success) {
-      Navigator.pushReplacementNamed(context, '/license-created');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EmailVerification(
+            email: email,
+            password: password,
+          ),
+        ),
+      );
       return;
     }
 
