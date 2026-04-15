@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'accelerometer.dart';
 
 bool truthholder = false;
@@ -12,20 +12,14 @@ class ScanCodePage extends StatefulWidget {
   State<ScanCodePage> createState() => _ScanCodePageState();
 }
 
+// DotEnv dotenv = DotEnv() is automatically called during import.
+// If you want to load multiple dotenv files or name your dotenv object differently, you can do the following and import the singleton into the relavant files:
+// DotEnv another_dotenv = DotEnv()
 
 
 class _ScanCodePageState extends State<ScanCodePage> {
   String _scannedValue = '';
   String urlString = '';
- String _BASE_URL = '';
-  
-  Future QR_Scanner() async {
- 
-  await dotenv.load(fileName: ".env");
-
-  _BASE_URL = dotenv.get("BASE_URL"); // => "staging-value"
-
-}
 
   void _onDetect(BarcodeCapture capture) {
     final barcode = capture.barcodes.firstOrNull;
@@ -33,22 +27,21 @@ class _ScanCodePageState extends State<ScanCodePage> {
     final value = barcode!.rawValue!;
     setState(() {
       _scannedValue = value;
-      
+      final baseUrl = dotenv.env['BASE_URL'];
       //http://{{baseurl}}/api/session/{{sessionToken}}/approve
-      if(_scannedValue != ''){
-      urlString = 'http://$_BASE_URL/api/session/$_scannedValue/approve';
+      if(_scannedValue != '' && baseUrl != ''){
+      urlString = "http://$baseUrl/api/session/$_scannedValue/approve";
       truthholder = true;
       } else {
        Text('Speed threshold reached :D');
       }
-
     });
    
 
     if(_scannedValue != ''){
       launchUrlString(urlString, mode: LaunchMode.externalApplication);
     }else{ 
-                Text('Error pulling sessionToken');
+      Text('Error pulling sessionToken');
     }
     
      
