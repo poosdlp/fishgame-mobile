@@ -186,7 +186,7 @@ class _HomeState extends State<Home> {
                                 ),
                               ),
                             ),
-                            SizedBox(height: sh * 0.012),
+                            SizedBox(height: sh * 0.01),
                             SizedBox(
                               height: 42,
                               width: double.infinity,
@@ -217,19 +217,19 @@ class _HomeState extends State<Home> {
                   ),
                 ],
               ),
-              SizedBox(height: sh * 0.1),
+              SizedBox(height: sh * 0.085),
               Text(
                 'Orlando\nFishing\nAdventure',
                 textAlign: TextAlign.center,
                 style: titleStyle,
               ),
-              SizedBox(height: sh * 0.045),
+              SizedBox(height: sh * 0.04),
               Text(
                 'Scan the QR code to Play!',
                 textAlign: TextAlign.center,
                 style: messageStyle,
               ),
-              SizedBox(height: sh * 0.1),
+              SizedBox(height: sh * 0.075),
               SizedBox(
                 width: sw * 0.3,
                 height: sw * 0.3,
@@ -253,13 +253,13 @@ class _HomeState extends State<Home> {
                   child: Icon(Icons.photo_camera, size: sw * 0.175),
                 ),
               ),
-              const Spacer(),
+              SizedBox(height: sh * 0.045),
               FutureBuilder<AuthUser?>(
                 future: _currentUserFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Padding(
-                      padding: EdgeInsets.only(bottom: sh * 0.15),
+                      padding: EdgeInsets.only(bottom: sh * 0.12),
                       child: Column(
                         children: [
                           const SizedBox(
@@ -285,11 +285,11 @@ class _HomeState extends State<Home> {
 
                   if (user != null && user.username.isNotEmpty) {
                     return Padding(
-                      padding: EdgeInsets.only(bottom: sh * 0.15),
+                      padding: EdgeInsets.only(bottom: sh * 0.11),
                       child: Container(
                         width: double.infinity,
                         padding: EdgeInsets.symmetric(
-                          vertical: sh * 0.024,
+                          vertical: sh * 0.022,
                           horizontal: sw * 0.06,
                         ),
                         decoration: BoxDecoration(
@@ -329,6 +329,7 @@ class _HomeState extends State<Home> {
                     children: [
                       Row(
                         children: [
+                          SizedBox(height: sh * 0.25),
                           Expanded(
                             child: _RouteButton(
                               label: 'Sign Up',
@@ -346,7 +347,6 @@ class _HomeState extends State<Home> {
                           ),
                         ],
                       ),
-                      SizedBox(height: sh * 0.15),
                     ],
                   );
                 },
