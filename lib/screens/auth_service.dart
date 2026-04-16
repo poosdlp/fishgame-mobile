@@ -77,9 +77,15 @@ class AuthService {
       final message = data['message']?.toString() ?? 'Unable to create account';
 
       if (response.statusCode == 201) {
+        final loginResult = await login(
+          email: email,
+          password: password,
+        );
+
         return AuthResult(
           success: true,
           message: message,
+          accessToken: loginResult.accessToken,
         );
       }
 
@@ -176,7 +182,7 @@ class AuthService {
 
       final retryResponse = await http
           .get(
-            _uri('/auth/me'),
+            _uri('/profile/me'),
             headers: _authHeaders(),
           )
           .timeout(const Duration(seconds: 10));

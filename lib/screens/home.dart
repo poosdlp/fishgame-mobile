@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../widgets/QR_Scanner.dart';
+
 import '../services/auth_service.dart';
+import '../widgets/QR_Scanner.dart';
 import '../widgets/fish_background_screen.dart';
 
 class Home extends StatefulWidget {
@@ -32,6 +33,28 @@ class _HomeState extends State<Home> {
     setState(() {
       _loadSession();
     });
+  }
+
+  Future<void> _showDeleteAccountUnavailable() async {
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: const Text(
+            'The mobile app button is ready, but the backend does not have a delete account endpoint yet.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -80,8 +103,14 @@ class _HomeState extends State<Home> {
       color: Colors.white,
     );
 
-    final smallLogoutStyle = GoogleFonts.pixelifySans(
-      fontSize: sw * 0.036,
+    final topButtonStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.034,
+      fontWeight: FontWeight.w600,
+      color: Colors.white,
+    );
+
+    final deleteButtonStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.03,
       fontWeight: FontWeight.w600,
       color: Colors.white,
     );
@@ -96,6 +125,7 @@ class _HomeState extends State<Home> {
             children: [
               SizedBox(height: sh * 0.02),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   SizedBox(
@@ -129,22 +159,58 @@ class _HomeState extends State<Home> {
                       }
 
                       return SizedBox(
-                        height: 42,
-                        child: ElevatedButton(
-                          onPressed: _logout,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xCC1A237E),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(horizontal: sw * 0.04),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: const BorderSide(color: Colors.white, width: 2),
+                        width: sw * 0.32,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            SizedBox(
+                              height: 42,
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _logout,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xCC1A237E),
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(horizontal: sw * 0.03),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: const BorderSide(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('Log Out', style: topButtonStyle),
+                                ),
+                              ),
                             ),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Log Out', style: smallLogoutStyle),
-                          ),
+                            SizedBox(height: sh * 0.012),
+                            SizedBox(
+                              height: 42,
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _showDeleteAccountUnavailable,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFD32F2F),
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(horizontal: sw * 0.02),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: const BorderSide(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('Delete Account', style: deleteButtonStyle),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -168,12 +234,12 @@ class _HomeState extends State<Home> {
                 width: sw * 0.3,
                 height: sw * 0.3,
                 child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ScanCodePage()),
-                          );
-                        },
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ScanCodePage()),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFBDBDBD),
                     foregroundColor: Colors.white,
@@ -221,14 +287,18 @@ class _HomeState extends State<Home> {
                     return Padding(
                       padding: EdgeInsets.only(bottom: sh * 0.15),
                       child: Container(
+                        width: double.infinity,
                         padding: EdgeInsets.symmetric(
-                          vertical: sh * 0.02,
+                          vertical: sh * 0.024,
                           horizontal: sw * 0.06,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xAA006064), // soft dark blue
+                          color: const Color(0xFF6EC6FF),
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(
+                            color: const Color(0xFF1A237E),
+                            width: 2,
+                          ),
                           boxShadow: const [
                             BoxShadow(
                               color: Color(0x55000000),
@@ -240,7 +310,7 @@ class _HomeState extends State<Home> {
                         child: RichText(
                           textAlign: TextAlign.center,
                           text: TextSpan(
-                            style: messageStyle,
+                            style: messageStyle.copyWith(color: Colors.white),
                             children: [
                               const TextSpan(text: 'Good luck fishing today '),
                               TextSpan(
