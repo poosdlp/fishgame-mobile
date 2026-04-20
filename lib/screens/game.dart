@@ -3,15 +3,19 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../services/game_socket_service.dart';
+import '../widgets/fish_background_screen.dart';
 
 enum _GameFlow {
-  armed,
-  waitingForBite,
-  catching,
-  caughtDialog,
+  casting,
+  waiting,
+  bite,
+  minigame,
+  lost,
+  caught,
 }
 
 const bool _enableDebugUi = bool.fromEnvironment(
@@ -29,18 +33,19 @@ class Game extends StatefulWidget {
 class _GameState extends State<Game> {
   final GameSocketService _socket = GameSocketService.instance;
   late final StreamSubscription<AccelerometerEvent> _accelerometerSubscription;
+  Timer? _loseReturnTimer;
 
-  _GameFlow _flow = _GameFlow.armed;
-  bool _hasCast = false;
-  bool _winDialogShowing = false;
+  _GameFlow _flow = _GameFlow.casting;
+  bool _motionLocked = false;
+
   double _debugAccelX = 0.0;
   double _debugAccelY = 0.0;
   double _debugAccelZ = 0.0;
   double _debugMagnitude = 0.0;
   double _debugMotion = 0.0;
-  bool _debugCanCast = false;
+  String _debugPhase = 'casting';
 
-  static const double _castThreshold = 5.0;
+  static const double _motionThreshold = 5.0;
 
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _GameState extends State<Game> {
 
   @override
   void dispose() {
+    _loseReturnTimer?.cancel();
     _socket.removeListener(_handleSocketChanged);
     _accelerometerSubscription.cancel();
     super.dispose();
@@ -59,26 +65,32 @@ class _GameState extends State<Game> {
   void _handleSocketChanged() {
     if (!mounted) return;
 
-    final socketState = _socket.gameState;
+    final state = _socket.gameState;
 
-    if (socketState == 'bite' && _flow == _GameFlow.waitingForBite) {
+    if (state == 'bite' && _flow == _GameFlow.waiting) {
       setState(() {
-        _flow = _GameFlow.catching;
-        _hasCast = false;
+        _flow = _GameFlow.bite;
+        _motionLocked = false;
+        _debugPhase = 'bite';
       });
       return;
     }
 
-    if (socketState == 'caught') {
+    if (state == 'none' && (_flow == _GameFlow.waiting || _flow == _GameFlow.bite)) {
       setState(() {
-        _flow = _GameFlow.caughtDialog;
-        _hasCast = false;
-        _winDialogShowing = true;
+        _flow = _GameFlow.casting;
+        _motionLocked = false;
+        _debugPhase = 'casting';
       });
       return;
     }
 
-    if (socketState == 'none' && _flow == _GameFlow.caughtDialog) {
+    if (state == 'caught') {
+      setState(() {
+        _flow = _GameFlow.caught;
+        _motionLocked = false;
+        _debugPhase = 'caught';
+      });
       return;
     }
 
@@ -90,11 +102,16 @@ class _GameState extends State<Game> {
       event.x * event.x + event.y * event.y + event.z * event.z,
     );
     final motion = (magnitude - 9.8).clamp(0.0, double.infinity);
+    debugPrint(
+      'Motion: ${motion.toStringAsFixed(3)} | Threshold: ${_motionThreshold.toStringAsFixed(3)}',
+    );
 
-    final canCast = _socket.isConnected &&
-        _socket.isReady &&
-        _flow == _GameFlow.armed &&
-        !_hasCast;
+    final canUseMotion = _socket.isConnected &&
+      _socket.isReady &&
+      (_flow == _GameFlow.casting ||
+        _flow == _GameFlow.waiting ||
+        _flow == _GameFlow.bite) &&
+      !_motionLocked;
 
     if (mounted) {
       setState(() {
@@ -103,217 +120,222 @@ class _GameState extends State<Game> {
         _debugAccelZ = event.z;
         _debugMagnitude = magnitude;
         _debugMotion = motion;
-        _debugCanCast = canCast;
       });
     }
 
-    if (!canCast) {
+    if (!canUseMotion || motion < _motionThreshold) {
       return;
     }
 
-    if (motion < _castThreshold) {
+    _motionLocked = true;
+
+    if (_flow == _GameFlow.casting) {
+      _socket.sendAction('fish');
+      setState(() {
+        _flow = _GameFlow.waiting;
+        _debugPhase = 'waiting';
+      });
       return;
     }
 
-    _hasCast = true;
-    setState(() {
-      _flow = _GameFlow.waitingForBite;
-    });
-    _socket.sendAction('fish');
-    if (mounted) {
-      setState(() {});
+    if (_flow == _GameFlow.waiting) {
+      _socket.sendAction('reel');
+      setState(() {
+        _debugPhase = 'waiting';
+      });
+      return;
+    }
+
+    if (_flow == _GameFlow.bite) {
+      setState(() {
+        _flow = _GameFlow.minigame;
+        _debugPhase = 'minigame';
+      });
     }
   }
 
-  Future<void> _handleCatchWin() async {
-    if (_winDialogShowing || !mounted) return;
+  Future<void> _onMinigameWin() async {
+    if (!mounted) return;
 
-    setState(() {
-      _winDialogShowing = true;
-      _flow = _GameFlow.caughtDialog;
-      _hasCast = false;
-    });
-
+    _loseReturnTimer?.cancel();
     _socket.sendAction('catch');
+    setState(() {
+      _flow = _GameFlow.caught;
+      _motionLocked = false;
+      _debugPhase = 'caught';
+    });
   }
 
-  Future<void> _handleCaughtDismissed() async {
+  Future<void> _onMinigameLose() async {
     if (!mounted) return;
 
+    _socket.sendAction('reel');
     setState(() {
-      _winDialogShowing = false;
+      _flow = _GameFlow.lost;
+      _motionLocked = false;
+      _debugPhase = 'lost';
     });
 
+    _loseReturnTimer?.cancel();
+    _loseReturnTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    });
+  }
+
+  Future<void> _finishCaughtAndReturnHome() async {
     _socket.sendAction('caught');
-    await _socket.disconnect(notify: false);
 
     if (!mounted) return;
-
     Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-  }
-
-  Widget _buildCastingPage(TextStyle titleStyle) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Casting page',
-              textAlign: TextAlign.center,
-              style: titleStyle.copyWith(fontSize: 21),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Move the phone like a casting motion to send fish.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            if (_enableDebugUi) ...[
-              const SizedBox(height: 12),
-              _buildDebugTelemetryCard(),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWaitingPage(TextStyle titleStyle) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Waiting for a bite',
-              textAlign: TextAlign.center,
-              style: titleStyle.copyWith(fontSize: 21),
-            ),
-            const SizedBox(height: 12),
-            const Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'The line is in the water. Wait for bite before the minigame appears.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCaughtPage(TextStyle titleStyle) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Fish caught',
-              textAlign: TextAlign.center,
-              style: titleStyle.copyWith(fontSize: 24),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'You caught the fish. Dismiss this page to send caught and return home.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 18),
-            ElevatedButton(
-              onPressed: _handleCaughtDismissed,
-              child: const Text('Return Home'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _backToHome() async {
-    await _socket.disconnect(notify: false);
     if (!mounted) return;
 
     Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
   }
 
-  Widget _buildStatusCard(TextStyle titleStyle, TextStyle valueStyle) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Connection: ${_socket.connectionLabel}', style: titleStyle),
-            const SizedBox(height: 4),
-            Text('Ready: ${_socket.isReady ? 'yes' : 'no'}', style: valueStyle),
-            const SizedBox(height: 4),
-            Text('State: ${_socket.gameState}', style: valueStyle),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildImmersivePage({
+    required String title,
+    required String subtitle,
+    List<Widget> children = const [],
+  }) {
+    final size = MediaQuery.sizeOf(context);
+    final sw = size.width;
 
-  Widget _buildDebugTelemetryCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: DefaultTextStyle(
-          style: Theme.of(context).textTheme.bodyMedium ?? const TextStyle(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Cast debug: ${_debugCanCast ? 'armed' : 'blocked'}'),
-              const SizedBox(height: 4),
-              Text('X: ${_debugAccelX.toStringAsFixed(2)}'),
-              Text('Y: ${_debugAccelY.toStringAsFixed(2)}'),
-              Text('Z: ${_debugAccelZ.toStringAsFixed(2)}'),
-              Text('Magnitude: ${_debugMagnitude.toStringAsFixed(2)}'),
-              Text('Motion: ${_debugMotion.toStringAsFixed(2)} / $_castThreshold'),
-            ],
+    final titleStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.11,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFFFF5F87),
+      height: 0.95,
+      shadows: const [
+        Shadow(color: Color(0x99000000), offset: Offset(3, 3), blurRadius: 0),
+      ],
+    );
+
+    final messageStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.06,
+      fontWeight: FontWeight.w600,
+      color: Colors.white,
+      shadows: const [
+        Shadow(color: Color(0x80000000), offset: Offset(2, 2), blurRadius: 0),
+      ],
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: titleStyle,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: messageStyle,
+                ),
+                const SizedBox(height: 24),
+                ...children,
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCatchPanel() {
-    return SizedBox(
-      height: math.max(430.0, MediaQuery.sizeOf(context).height * 0.58),
-      child: _CatchMiniGame(onWin: _handleCatchWin),
+  Widget _buildCastingPage() {
+    return _buildImmersivePage(
+      title: 'Casting',
+      subtitle: 'Make a casting motion with your phone to throw the line.',
     );
   }
 
-  Widget _buildEventLog() {
+  Widget _buildWaitingPage() {
+    return _buildImmersivePage(
+      title: 'Waiting',
+      subtitle: 'Your line is in the water. Wait until a fish bites.',
+    );
+  }
+
+  Widget _buildBitePage() {
+    return _buildImmersivePage(
+      title: 'Bite!',
+      subtitle: 'Fish on the hook. Make the same casting motion to start reeling.',
+    );
+  }
+
+  Widget _buildCaughtPage() {
+    return _buildImmersivePage(
+      title: 'Fish Caught',
+      subtitle: 'Nice catch. Finish to return to Home.',
+      children: [
+        SizedBox(
+          width: 220,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: _finishCaughtAndReturnHome,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+            ),
+            child: Text(
+              'Finish',
+              style: GoogleFonts.pixelifySans(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLostPage() {
+    return _buildImmersivePage(
+      title: 'You Lost',
+      subtitle: 'The fish got away. Returning to Home...',
+      children: const [
+        Icon(Icons.sentiment_dissatisfied, size: 72, color: Colors.white),
+      ],
+    );
+  }
+
+  Widget _buildDebugCard() {
     final events = _socket.events;
 
     return Card(
+      margin: const EdgeInsets.only(top: 12),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Event Log',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
+            Text('Socket: ${_socket.connectionLabel}'),
+            Text('Ready: ${_socket.isReady}'),
+            Text('WS state: ${_socket.gameState}'),
+            Text('Flow: $_debugPhase'),
+            Text('X: ${_debugAccelX.toStringAsFixed(2)}'),
+            Text('Y: ${_debugAccelY.toStringAsFixed(2)}'),
+            Text('Z: ${_debugAccelZ.toStringAsFixed(2)}'),
+            Text('Magnitude: ${_debugMagnitude.toStringAsFixed(2)}'),
+            Text('Motion: ${_debugMotion.toStringAsFixed(2)} / $_motionThreshold'),
             const SizedBox(height: 8),
+            const Text('Events', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
             SizedBox(
-              height: 140,
+              height: 130,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: Colors.black,
@@ -346,48 +368,53 @@ class _GameState extends State<Game> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final titleStyle = theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        ) ??
-        const TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
-    final bodyStyle = theme.textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
+    Widget body;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fishing Game'),
-        actions: [
-          IconButton(
-            onPressed: _backToHome,
-            icon: const Icon(Icons.home),
+    switch (_flow) {
+      case _GameFlow.casting:
+        body = _buildCastingPage();
+      case _GameFlow.waiting:
+        body = _buildWaitingPage();
+      case _GameFlow.bite:
+        body = _buildBitePage();
+      case _GameFlow.minigame:
+        body = _CatchMiniGame(
+          onWin: _onMinigameWin,
+          onLose: _onMinigameLose,
+        );
+      case _GameFlow.lost:
+        body = _buildLostPage();
+      case _GameFlow.caught:
+        body = _buildCaughtPage();
+    }
+
+    return FishBackgroundScreen(
+      useSafeArea: false,
+      scrollable: false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Fishing Game',
+            style: GoogleFonts.pixelifySans(
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_enableDebugUi) ...[
-                _buildStatusCard(titleStyle, bodyStyle),
-                const SizedBox(height: 12),
-              ],
-              if (_flow == _GameFlow.catching)
-                _buildCatchPanel()
-              else if (_flow == _GameFlow.caughtDialog)
-                _buildCaughtPage(titleStyle)
-              else if (_flow == _GameFlow.waitingForBite)
-                _buildWaitingPage(titleStyle)
-              else
-                _buildCastingPage(titleStyle),
-              if (_enableDebugUi) ...[
-                const SizedBox(height: 12),
-                _buildEventLog(),
-              ],
-            ],
-          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [
+            IconButton(
+              onPressed: _backToHome,
+              icon: const Icon(Icons.home),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            Expanded(child: body),
+            if (_enableDebugUi) _buildDebugCard(),
+          ],
         ),
       ),
     );
@@ -396,8 +423,12 @@ class _GameState extends State<Game> {
 
 class _CatchMiniGame extends StatefulWidget {
   final VoidCallback onWin;
+  final VoidCallback onLose;
 
-  const _CatchMiniGame({required this.onWin});
+  const _CatchMiniGame({
+    required this.onWin,
+    required this.onLose,
+  });
 
   @override
   State<_CatchMiniGame> createState() => _CatchMiniGameState();
@@ -410,6 +441,7 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
 
   bool _isPressing = false;
   bool _won = false;
+  bool _lost = false;
 
   Duration? _lastTick;
 
@@ -444,7 +476,7 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
   }
 
   void _onFishTick(Duration elapsed) {
-    if (!mounted || _won) return;
+    if (!mounted || _won || _lost) return;
 
     final last = _lastTick;
     _lastTick = elapsed;
@@ -503,6 +535,15 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
         }
       });
     }
+
+    if (nextProgress <= 0.0 && !_lost) {
+      _lost = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onLose();
+        }
+      });
+    }
   }
 
   void _setPressing(bool value) {
@@ -526,11 +567,10 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
     final size = media.size;
     final sw = size.width;
     final sh = size.height;
-    final safeTop = media.padding.top;
 
     final horizontalPadding = sw * 0.06;
 
-    final meterOuterHeight = sh * 0.72;
+    final meterOuterHeight = sh * 0.54;
     final meterOuterWidth = math.max(64.0, sw * 0.19);
     final meterPadding = math.max(6.0, meterOuterWidth * 0.09);
 
@@ -558,36 +598,34 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
       _fishTop = maxFishTop;
     }
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.blueGrey.shade900,
-            const Color(0xFF0B3D2E),
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: (_) => _setPressing(true),
         onPointerUp: (_) => _setPressing(false),
         onPointerCancel: (_) => _setPressing(false),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-          child: Column(
-            children: [
-              SizedBox(height: safeTop + 8),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
               Text(
-                'Bite! Hold to reel the fish in.',
+                'Reel In!',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: GoogleFonts.pixelifySans(
+                  fontSize: sw * 0.075,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  shadows: const [
+                    Shadow(color: Color(0x80000000), offset: Offset(2, 2), blurRadius: 0),
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               SizedBox(
@@ -615,23 +653,13 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x55000000),
-                              blurRadius: 10,
-                              offset: Offset(0, 6),
-                            ),
-                          ],
                         ),
                         child: Padding(
                           padding: EdgeInsets.all(meterPadding),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(4),
                             child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
+                              decoration: const BoxDecoration(color: Colors.white),
                               child: Stack(
                                 children: [
                                   AnimatedBuilder(
@@ -641,15 +669,11 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
                                           (_zoneController.value * maxTravel)
                                               .clamp(0.0, maxTravel);
                                       _currentZoneTop = topOffset;
-                                      return Stack(
-                                        children: [
-                                          Positioned(
-                                            left: 0,
-                                            right: 0,
-                                            top: topOffset,
-                                            child: child!,
-                                          ),
-                                        ],
+                                      return Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        top: topOffset,
+                                        child: child!,
                                       );
                                     },
                                     child: _AccuracyZone(
@@ -676,41 +700,14 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
                     ),
                     SizedBox(width: sw * 0.08),
                     Expanded(
-                      child: SizedBox(
-                        height: meterOuterHeight,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.pushNamedAndRemoveUntil(
-                                  context,
-                                  '/home',
-                                  (route) => false,
-                                );
-                              },
-                              icon: const Icon(Icons.arrow_back),
-                              label: const Text('Back to home'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xCC000000),
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: Center(
-                                child: Text(
-                                  'Hold the screen to keep the line tight.\nRelease to let it drop.\nRed is best, then yellow, then green.',
-                                  textAlign: TextAlign.center,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium?.copyWith(
-                                            color: Colors.white,
-                                            height: 1.25,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                ),
-                              ),
-                            ),
+                      child: Text(
+                        'Hold screen = fish rises\nRelease = fish falls\nFill meter to win.',
+                        style: GoogleFonts.pixelifySans(
+                          fontSize: sw * 0.05,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          shadows: const [
+                            Shadow(color: Color(0x80000000), offset: Offset(2, 2), blurRadius: 0),
                           ],
                         ),
                       ),
@@ -718,23 +715,12 @@ class _CatchMiniGameState extends State<_CatchMiniGame> with TickerProviderState
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Center(
-                  child: Slider(
-                    value: progress,
-                    min: 0,
-                    max: 1,
-                    onChanged: (value) {
-                      setState(() {
-                        progress = value;
-                      });
-                    },
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -765,26 +751,17 @@ class _AccuracyZone extends StatelessWidget {
           Container(
             width: double.infinity,
             height: greenHeight,
-            decoration: BoxDecoration(
-              color: const Color(0xFF23C552),
-              borderRadius: BorderRadius.circular(3),
-            ),
+            color: const Color(0xFF23C552),
           ),
           Container(
             width: double.infinity,
             height: yellowHeight,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFD54F),
-              borderRadius: BorderRadius.circular(3),
-            ),
+            color: const Color(0xFFFFD54F),
           ),
           Container(
             width: double.infinity,
             height: redHeight,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE53935),
-              borderRadius: BorderRadius.circular(3),
-            ),
+            color: const Color(0xFFE53935),
           ),
         ],
       ),
@@ -856,18 +833,6 @@ class _PixelFishPainter extends CustomPainter {
         );
       }
     }
-
-    final eyePaint = Paint()..color = Colors.white;
-    final pupilPaint = Paint()..color = Colors.black;
-
-    canvas.drawRect(
-      Rect.fromLTWH(pixelW * 8, pixelH * 3, pixelW, pixelH),
-      eyePaint,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(pixelW * 8.4, pixelH * 3.3, pixelW * 0.45, pixelH * 0.45),
-      pupilPaint,
-    );
   }
 
   @override

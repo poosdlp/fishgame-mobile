@@ -390,6 +390,43 @@ class AuthService {
     }
   }
 
+  Future<AuthResult> deleteAccount() async {
+    try {
+      final response = await http
+          .delete(
+            _uri('/profile/me'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('DELETE ACCOUNT status=${response.statusCode}');
+      debugPrint('DELETE ACCOUNT response=${response.body}');
+
+      final data = _decodeBody(response.body);
+      final message = data['message']?.toString() ?? 'Account deleted';
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return AuthResult(
+          success: true,
+          message: message,
+        );
+      }
+
+      return AuthResult(
+        success: false,
+        message: message,
+      );
+    } catch (e, st) {
+      debugPrint('DELETE ACCOUNT exception=$e');
+      debugPrintStack(stackTrace: st);
+
+      return AuthResult(
+        success: false,
+        message: 'Could not delete account: $e',
+      );
+    }
+  }
+
   static Map<String, String> _authHeaders() {
     final headers = <String, String>{
       'Content-Type': 'application/json',
