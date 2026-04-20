@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:url_launcher/url_launcher_string.dart';
+
+import '../services/auth_service.dart';
 import 'accelerometer.dart';
 
 bool truthholder = false;
@@ -13,34 +13,30 @@ class ScanCodePage extends StatefulWidget {
 }
 
 class _ScanCodePageState extends State<ScanCodePage> {
-  String _scannedValue = '';
-  
-  String urlString = '';
+  String _statusMessage = '';
+  bool _isRequesting = false;
 
-  void _onDetect(BarcodeCapture capture) {
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_isRequesting) return;
+
     final barcode = capture.barcodes.firstOrNull;
     if (barcode?.rawValue == null) return;
     final value = barcode!.rawValue!;
+
     setState(() {
-      _scannedValue = value;
-      //http://{{baseurl}}/api/session/{{sessionToken}}/approve
-      if(_scannedValue != ''){
-      urlString = 'http://{{baseurl}}/api/session/$_scannedValue/approve';
+      _statusMessage = '';
       truthholder = true;
-      } else {
-       Text('Speed threshold reached :D');
-      }
-
+      _isRequesting = true;
     });
-   
 
-    if(_scannedValue != ''){
-      launchUrlString(urlString, mode: LaunchMode.externalApplication);
-    }else{ 
-                Text('Error pulling sessionToken');
-    }
-    
-     
+    final result = await AuthService().approveSession(sessionToken: value);
+
+    if (!mounted) return;
+
+    setState(() {
+      _statusMessage = result.message;
+      _isRequesting = false;
+    });
   }
 
   @override
@@ -64,12 +60,17 @@ class _ScanCodePageState extends State<ScanCodePage> {
               onDetect: _onDetect,
             ),
           ),
+          if (_statusMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                _statusMessage,
+                textAlign: TextAlign.center,
+              ),
+            ),
         ],
       ),
     );
   }
-
-  Future<bool> urllauncher() => launchUrlString(urlString);
-  
 
 }

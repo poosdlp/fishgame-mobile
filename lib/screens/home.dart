@@ -1,7 +1,9 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
+import '../services/game_socket_service.dart';
 import '../widgets/QR_Scanner.dart';
 import '../widgets/fish_background_screen.dart';
 
@@ -15,11 +17,24 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   late Future<AuthUser?> _currentUserFuture;
   final AuthService _authService = AuthService();
+  final GameSocketService _gameSocket = GameSocketService.instance;
 
   @override
   void initState() {
     super.initState();
+    _gameSocket.addListener(_onGameSocketChanged);
     _loadSession();
+  }
+
+  @override
+  void dispose() {
+    _gameSocket.removeListener(_onGameSocketChanged);
+    super.dispose();
+  }
+
+  void _onGameSocketChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _loadSession() {
@@ -55,6 +70,51 @@ class _HomeState extends State<Home> {
         );
       },
     );
+  }
+
+  Future<void> _showSessionTokenDialog() async {
+    final sessionToken = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => const _SessionTokenDialog(),
+    );
+
+    if (sessionToken == null || sessionToken.isEmpty) {
+      return;
+    }
+
+    final result = await _authService.approveSession(sessionToken: sessionToken);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+
+    if (!result.success) {
+      return;
+    }
+
+    final pollResult = await _authService.pollSessionAccessToken(sessionToken: sessionToken);
+    if (!mounted) return;
+
+    if (!pollResult.success || pollResult.accessToken == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(pollResult.message)),
+      );
+      return;
+    }
+
+    final ready = await _gameSocket.connectAndWaitForReady(pollResult.accessToken!);
+    if (!mounted) return;
+
+    if (ready) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Game is ready. Press Play.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Game client was not ready yet.')),
+      );
+    }
   }
 
   @override
@@ -109,6 +169,12 @@ class _HomeState extends State<Home> {
       color: Colors.white,
     );
 
+    final playButtonStyle = GoogleFonts.pixelifySans(
+      fontSize: sw * 0.05,
+      fontWeight: FontWeight.w700,
+      color: Colors.white,
+    );
+
     final deleteButtonStyle = GoogleFonts.pixelifySans(
       fontSize: sw * 0.03,
       fontWeight: FontWeight.w600,
@@ -128,28 +194,32 @@ class _HomeState extends State<Home> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  SizedBox(
-                    height: 36,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pushNamed(context, '/game'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5D4037),
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: sw * 0.04),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: const BorderSide(
-                            color: Colors.orangeAccent,
-                            width: 2,
+                  if (!_gameSocket.isReady)
+                    SizedBox(
+                      height: 36,
+                      child: ElevatedButton.icon(
+                        onPressed: _showSessionTokenDialog,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00695C),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: sw * 0.03),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(
+                              color: Colors.white,
+                              width: 2,
+                            ),
                           ),
                         ),
+                        icon: const Icon(Icons.paste, size: 16),
+                        label: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('PASTE QR', style: smallStyle),
+                        ),
                       ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('DEV PLAY', style: smallStyle),
-                      ),
-                    ),
-                  ),
+                    )
+                  else
+                    const SizedBox.shrink(),
                   FutureBuilder<AuthUser?>(
                     future: _currentUserFuture,
                     builder: (context, snapshot) {
@@ -224,35 +294,64 @@ class _HomeState extends State<Home> {
                 style: titleStyle,
               ),
               SizedBox(height: sh * 0.04),
-              Text(
-                'Scan the QR code to Play!',
-                textAlign: TextAlign.center,
-                style: messageStyle,
-              ),
-              SizedBox(height: sh * 0.075),
-              SizedBox(
-                width: sw * 0.3,
-                height: sw * 0.3,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ScanCodePage()),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFBDBDBD),
-                    foregroundColor: Colors.white,
-                    elevation: 8,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      side: const BorderSide(color: Colors.black87, width: 2),
-                    ),
-                  ),
-                  child: Icon(Icons.photo_camera, size: sw * 0.175),
+              if (_gameSocket.isReady) ...[
+                Text(
+                  'Ready to play',
+                  textAlign: TextAlign.center,
+                  style: messageStyle,
                 ),
-              ),
+                SizedBox(height: sh * 0.05),
+                SizedBox(
+                  width: sw * 0.52,
+                  height: 64,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/game');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      elevation: 8,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        side: const BorderSide(color: Colors.white, width: 2),
+                      ),
+                    ),
+                    child: Text('Play', style: playButtonStyle),
+                  ),
+                ),
+              ] else ...[
+                Text(
+                  'Scan the QR code to Play!',
+                  textAlign: TextAlign.center,
+                  style: messageStyle,
+                ),
+                SizedBox(height: sh * 0.075),
+                SizedBox(
+                  width: sw * 0.3,
+                  height: sw * 0.3,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ScanCodePage()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFBDBDBD),
+                      foregroundColor: Colors.white,
+                      elevation: 8,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        side: const BorderSide(color: Colors.black87, width: 2),
+                      ),
+                    ),
+                    child: Icon(Icons.photo_camera, size: sw * 0.175),
+                  ),
+                ),
+              ],
               SizedBox(height: sh * 0.045),
               FutureBuilder<AuthUser?>(
                 future: _currentUserFuture,
@@ -355,6 +454,78 @@ class _HomeState extends State<Home> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SessionTokenDialog extends StatefulWidget {
+  const _SessionTokenDialog();
+
+  @override
+  State<_SessionTokenDialog> createState() => _SessionTokenDialogState();
+}
+
+class _SessionTokenDialogState extends State<_SessionTokenDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final clipboardData = await Clipboard.getData('text/plain');
+    final clipboardText = clipboardData?.text?.trim() ?? '';
+    if (!mounted || clipboardText.isEmpty) return;
+
+    _controller.text = clipboardText;
+    _controller.selection = TextSelection.collapsed(
+      offset: _controller.text.length,
+    );
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Paste session token'),
+      content: SizedBox(
+        width: 320,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          textInputAction: TextInputAction.send,
+          decoration: const InputDecoration(
+            labelText: 'Session token',
+            hintText: 'Paste the scanned value here',
+          ),
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _pasteFromClipboard,
+          child: const Text('Paste'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Send'),
+        ),
+      ],
     );
   }
 }

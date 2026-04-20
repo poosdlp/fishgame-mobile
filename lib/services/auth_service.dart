@@ -44,6 +44,7 @@ class AuthService {
   static Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
   static AuthUser? get currentUser => _currentUser;
+  static String? get accessToken => _accessToken;
   static bool get isAuthenticated => _currentUser != null && _accessToken != null;
 
   Future<AuthResult> register({
@@ -189,6 +190,119 @@ class AuthService {
     }
 
     return null;
+  }
+
+  Future<AuthResult> approveSession({required String sessionToken}) async {
+    if (_accessToken == null) {
+      final refreshed = await refreshAccessToken();
+      if (!refreshed) {
+        return const AuthResult(
+          success: false,
+          message: 'You must log in before approving a session.',
+        );
+      }
+    }
+
+    try {
+      final response = await http
+          .post(
+            _uri('/session/$sessionToken/approve'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = _decodeBody(response.body);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return AuthResult(
+          success: true,
+          message: data['message']?.toString() ?? 'QR request sent successfully.',
+        );
+      }
+
+      return AuthResult(
+        success: false,
+        message: data['message']?.toString() ?? 'QR request failed (${response.statusCode}).',
+      );
+    } catch (e, st) {
+      debugPrint('APPROVE SESSION exception=$e');
+      debugPrintStack(stackTrace: st);
+
+      return AuthResult(
+        success: false,
+        message: 'Could not send QR request: $e',
+      );
+    }
+  }
+
+  Future<AuthResult> pollSessionAccessToken({
+    required String sessionToken,
+    int maxAttempts = 15,
+    Duration interval = const Duration(seconds: 1),
+  }) async {
+    if (_accessToken == null) {
+      final refreshed = await refreshAccessToken();
+      if (!refreshed) {
+        return const AuthResult(
+          success: false,
+          message: 'You must log in before polling session status.',
+        );
+      }
+    }
+
+    for (var i = 0; i < maxAttempts; i++) {
+      try {
+        final response = await http
+            .get(
+              _uri('/session/$sessionToken/status'),
+              headers: _authHeaders(),
+            )
+            .timeout(const Duration(seconds: 10));
+
+        final data = _decodeBody(response.body);
+        final status = data['status']?.toString().toLowerCase() ?? '';
+        final accessToken = data['accessToken']?.toString();
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          if (status == 'approved' && accessToken != null && accessToken.isNotEmpty) {
+            return AuthResult(
+              success: true,
+              message: 'Session approved.',
+              accessToken: accessToken,
+            );
+          }
+
+          if (status == 'denied' || status == 'rejected' || status == 'expired') {
+            return AuthResult(
+              success: false,
+              message: 'Session is $status.',
+            );
+          }
+        } else {
+          return AuthResult(
+            success: false,
+            message: data['message']?.toString() ?? 'Failed to poll session status.',
+          );
+        }
+      } catch (e, st) {
+        debugPrint('POLL SESSION exception=$e');
+        debugPrintStack(stackTrace: st);
+
+        return AuthResult(
+          success: false,
+          message: 'Could not poll session status: $e',
+        );
+      }
+
+      if (i < maxAttempts - 1) {
+        await Future<void>.delayed(interval);
+      }
+    }
+
+    return const AuthResult(
+      success: false,
+      message: 'Timed out waiting for session approval.',
+    );
   }
 
   Future<bool> refreshAccessToken() async {
