@@ -36,7 +36,7 @@ class AuthUser {
 }
 
 class AuthService {
-  static const String baseUrl = 'http://contacts.0sake.net/api';
+  static const String baseUrl = 'https://fishgame.0sake.net/api';
   static const String _accessTokenKey = 'auth.accessToken';
   static const String _refreshCookieKey = 'auth.refreshCookie';
   static const String _currentUserKey = 'auth.currentUser';
