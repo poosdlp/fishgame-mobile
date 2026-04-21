@@ -1,5 +1,5 @@
-package com.example.fishgame_mobile
+package com.poosd.fishgame_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity: FlutterActivity()

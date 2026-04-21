@@ -1,0 +1,128 @@
+name: Flutter CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - develop
+      - dev
+      - 'feature/**'
+      - 'staging/**'
+      - 'test/**'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: Analyze and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Verify formatting (optional but recommended)
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+  build_branch_apk:
+    name: Build Branch APK
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload branch APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ github.ref_name }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+  build_and_distribute_main:
+    name: Build and Distribute Main APK
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Write Firebase service account
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > firebase-service-account.json
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Distribute APK to Firebase App Distribution
+        run: |
+          firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk \
+            --app "${{ secrets.FIREBASE_APP_ID }}" \
+            --groups "${{ secrets.FIREBASE_TESTER_GROUPS }}" \
+            --release-notes "Main build from commit ${{ github.sha }} on branch ${{ github.ref_name }}"
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: firebase-service-account.json
+
+      - name: Upload main release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-main-release
+          path: build/app/outputs/flutter-apk/app-release.apk

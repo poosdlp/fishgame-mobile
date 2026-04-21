@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "997691838717",
+    "project_id": "fishgame-mobile-35d91",
+    "storage_bucket": "fishgame-mobile-35d91.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:997691838717:android:20f707e75a954b1b37ee94",
+        "android_client_info": {
+          "package_name": "com.poosd.fishgame_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBgy0PHRXX-xrkU0KtwOPyJZvU4eCGc6I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
