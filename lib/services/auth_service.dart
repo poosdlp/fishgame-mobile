@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthResult {
   final bool success;
@@ -36,10 +37,14 @@ class AuthUser {
 
 class AuthService {
   static const String baseUrl = 'http://contacts.0sake.net/api';
+  static const String _accessTokenKey = 'auth.accessToken';
+  static const String _refreshCookieKey = 'auth.refreshCookie';
+  static const String _currentUserKey = 'auth.currentUser';
 
   static String? _accessToken;
   static String? _refreshCookie;
   static AuthUser? _currentUser;
+  static Future<void>? _loadSessionFuture;
 
   static Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
@@ -47,11 +52,81 @@ class AuthService {
   static String? get accessToken => _accessToken;
   static bool get isAuthenticated => _currentUser != null && _accessToken != null;
 
+  static Future<void> _ensureSessionLoaded() {
+    _loadSessionFuture ??= _loadSessionFromStorage();
+    return _loadSessionFuture!;
+  }
+
+  static Future<void> _loadSessionFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    _accessToken = prefs.getString(_accessTokenKey);
+    _refreshCookie = prefs.getString(_refreshCookieKey);
+
+    final userRaw = prefs.getString(_currentUserKey);
+    if (userRaw == null || userRaw.isEmpty) {
+      _currentUser = null;
+      return;
+    }
+
+    try {
+      final userJson = jsonDecode(userRaw);
+      if (userJson is Map<String, dynamic>) {
+        _currentUser = AuthUser.fromJson(userJson);
+        return;
+      }
+    } catch (_) {}
+
+    _currentUser = null;
+  }
+
+  static Future<void> _persistSession() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (_accessToken == null || _accessToken!.isEmpty) {
+      await prefs.remove(_accessTokenKey);
+    } else {
+      await prefs.setString(_accessTokenKey, _accessToken!);
+    }
+
+    if (_refreshCookie == null || _refreshCookie!.isEmpty) {
+      await prefs.remove(_refreshCookieKey);
+    } else {
+      await prefs.setString(_refreshCookieKey, _refreshCookie!);
+    }
+
+    if (_currentUser == null) {
+      await prefs.remove(_currentUserKey);
+    } else {
+      await prefs.setString(
+        _currentUserKey,
+        jsonEncode(<String, dynamic>{
+          'id': _currentUser!.id,
+          'email': _currentUser!.email,
+          'username': _currentUser!.username,
+        }),
+      );
+    }
+  }
+
+  static Future<void> _clearSession() async {
+    _accessToken = null;
+    _refreshCookie = null;
+    _currentUser = null;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_accessTokenKey);
+    await prefs.remove(_refreshCookieKey);
+    await prefs.remove(_currentUserKey);
+  }
+
   Future<AuthResult> register({
     required String username,
     required String email,
     required String password,
   }) async {
+    await _ensureSessionLoaded();
+
     try {
       final uri = _uri('/auth/register');
       final payload = {
@@ -103,6 +178,8 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    await _ensureSessionLoaded();
+
     try {
       final uri = _uri('/auth/login');
       final payload = {
@@ -132,6 +209,7 @@ class AuthService {
       if (response.statusCode == 200 && accessToken != null) {
         _accessToken = accessToken;
         await getCurrentUser();
+        await _persistSession();
       }
 
       return AuthResult(
@@ -153,6 +231,8 @@ class AuthService {
   }
 
   Future<AuthUser?> getCurrentUser() async {
+    await _ensureSessionLoaded();
+
     if (_accessToken == null) {
       final refreshed = await refreshAccessToken();
       if (!refreshed) return null;
@@ -168,6 +248,7 @@ class AuthService {
     if (response.statusCode == 200) {
       final data = _decodeBody(response.body);
       _currentUser = AuthUser.fromJson(data);
+      await _persistSession();
       return _currentUser;
     }
 
@@ -185,6 +266,7 @@ class AuthService {
       if (retryResponse.statusCode == 200) {
         final data = _decodeBody(retryResponse.body);
         _currentUser = AuthUser.fromJson(data);
+        await _persistSession();
         return _currentUser;
       }
     }
@@ -193,6 +275,8 @@ class AuthService {
   }
 
   Future<AuthResult> approveSession({required String sessionToken}) async {
+    await _ensureSessionLoaded();
+
     if (_accessToken == null) {
       final refreshed = await refreshAccessToken();
       if (!refreshed) {
@@ -240,6 +324,8 @@ class AuthService {
     int maxAttempts = 15,
     Duration interval = const Duration(seconds: 1),
   }) async {
+    await _ensureSessionLoaded();
+
     if (_accessToken == null) {
       final refreshed = await refreshAccessToken();
       if (!refreshed) {
@@ -306,6 +392,8 @@ class AuthService {
   }
 
   Future<bool> refreshAccessToken() async {
+    await _ensureSessionLoaded();
+
     if (_refreshCookie == null) {
       return false;
     }
@@ -338,6 +426,7 @@ class AuthService {
       }
 
       _accessToken = accessToken;
+      await _persistSession();
       return true;
     } catch (e, st) {
       debugPrint('REFRESH exception=$e');
@@ -347,6 +436,8 @@ class AuthService {
   }
 
   Future<AuthResult> logout() async {
+    await _ensureSessionLoaded();
+
     try {
       final response = await http
           .post(
@@ -358,9 +449,7 @@ class AuthService {
       debugPrint('LOGOUT status=${response.statusCode}');
       debugPrint('LOGOUT response=${response.body}');
 
-      _accessToken = null;
-      _refreshCookie = null;
-      _currentUser = null;
+      await _clearSession();
 
       if (response.statusCode == 200) {
         final data = _decodeBody(response.body);
@@ -379,9 +468,7 @@ class AuthService {
       debugPrint('LOGOUT exception=$e');
       debugPrintStack(stackTrace: st);
 
-      _accessToken = null;
-      _refreshCookie = null;
-      _currentUser = null;
+      await _clearSession();
 
       return AuthResult(
         success: false,
@@ -391,6 +478,8 @@ class AuthService {
   }
 
   Future<AuthResult> deleteAccount() async {
+    await _ensureSessionLoaded();
+
     try {
       final response = await http
           .delete(
@@ -459,6 +548,7 @@ class AuthService {
     if (firstPart.contains('=')) {
       _refreshCookie = firstPart;
       debugPrint('Stored refresh cookie=$_refreshCookie');
+      _persistSession();
     }
   }
 
