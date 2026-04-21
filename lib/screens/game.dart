@@ -3,8 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:vibration/vibration.dart';
 
 import '../services/game_socket_service.dart';
 import '../widgets/fish_background_screen.dart';
@@ -68,6 +70,7 @@ class _GameState extends State<Game> {
     final state = _socket.gameState;
 
     if (state == 'bite' && _flow == _GameFlow.waiting) {
+      unawaited(_vibrateOnBite());
       setState(() {
         _flow = _GameFlow.bite;
         _motionLocked = false;
@@ -76,10 +79,9 @@ class _GameState extends State<Game> {
       return;
     }
 
-    if (state == 'none' && (_flow == _GameFlow.waiting || _flow == _GameFlow.bite)) {
+    if (state == 'none' && _flow == _GameFlow.bite) {
       setState(() {
         _flow = _GameFlow.casting;
-        _motionLocked = false;
         _debugPhase = 'casting';
       });
       return;
@@ -123,7 +125,14 @@ class _GameState extends State<Game> {
       });
     }
 
-    if (!canUseMotion || motion < _motionThreshold) {
+    if (motion < _motionThreshold) {
+      if (_motionLocked) {
+        _motionLocked = false;
+      }
+      return;
+    }
+
+    if (!canUseMotion) {
       return;
     }
 
@@ -141,7 +150,8 @@ class _GameState extends State<Game> {
     if (_flow == _GameFlow.waiting) {
       _socket.sendAction('reel');
       setState(() {
-        _debugPhase = 'waiting';
+        _flow = _GameFlow.casting;
+        _debugPhase = 'casting';
       });
       return;
     }
@@ -183,16 +193,24 @@ class _GameState extends State<Game> {
     });
   }
 
+  Future<void> _vibrateOnBite() async {
+    try {
+      final canVibrate = await Vibration.hasVibrator();
+      if (canVibrate) {
+        await Vibration.vibrate(duration: 350, amplitude: 255);
+        return;
+      }
+    } catch (_) {
+      // Fall back below.
+    }
+
+    HapticFeedback.mediumImpact();
+  }
+
   Future<void> _finishCaughtAndReturnHome() async {
     _socket.sendAction('caught');
 
     if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-  }
-
-  Future<void> _backToHome() async {
-    if (!mounted) return;
-
     Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
   }
 
@@ -392,23 +410,6 @@ class _GameState extends State<Game> {
       useSafeArea: false,
       scrollable: false,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Fishing Game',
-            style: GoogleFonts.pixelifySans(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          actions: [
-            IconButton(
-              onPressed: _backToHome,
-              icon: const Icon(Icons.home),
-            ),
-          ],
-        ),
         backgroundColor: Colors.transparent,
         body: Column(
           children: [
