@@ -7,7 +7,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 import '../services/game_socket_service.dart';
 
-enum _GameFlow {
+enum GameFlow {
   armed,
   waitingForBite,
   catching,
@@ -18,6 +18,27 @@ const bool _enableDebugUi = bool.fromEnvironment(
   'ENABLE_DEBUG_UI',
   defaultValue: false,
 );
+
+double calculateMagnitude(double x, double y, double z) {
+  return math.sqrt((x * x) + (y * y) + (z * z));
+}
+
+double calculateMotion(double x, double y, double z) {
+  final magnitude = calculateMagnitude(x, y, z);
+  return (magnitude - 9.8).clamp(0.0, double.infinity);
+}
+
+bool canCast({
+  required bool isConnected,
+  required bool isReady,
+  required GameFlow flow,
+  required bool hasCast,
+}) {
+  return isConnected &&
+      isReady &&
+      flow == GameFlow.armed &&
+      !hasCast;
+}
 
 class Game extends StatefulWidget {
   const Game({super.key});
@@ -30,7 +51,7 @@ class _GameState extends State<Game> {
   final GameSocketService _socket = GameSocketService.instance;
   late final StreamSubscription<AccelerometerEvent> _accelerometerSubscription;
 
-  _GameFlow _flow = _GameFlow.armed;
+  GameFlow _flow = GameFlow.armed;
   bool _hasCast = false;
   bool _winDialogShowing = false;
   double _debugAccelX = 0.0;
@@ -61,9 +82,9 @@ class _GameState extends State<Game> {
 
     final socketState = _socket.gameState;
 
-    if (socketState == 'bite' && _flow == _GameFlow.waitingForBite) {
+    if (socketState == 'bite' && _flow == GameFlow.waitingForBite) {
       setState(() {
-        _flow = _GameFlow.catching;
+        _flow = GameFlow.catching;
         _hasCast = false;
       });
       return;
@@ -71,14 +92,14 @@ class _GameState extends State<Game> {
 
     if (socketState == 'caught') {
       setState(() {
-        _flow = _GameFlow.caughtDialog;
+        _flow = GameFlow.caughtDialog;
         _hasCast = false;
         _winDialogShowing = true;
       });
       return;
     }
 
-    if (socketState == 'none' && _flow == _GameFlow.caughtDialog) {
+    if (socketState == 'none' && _flow == GameFlow.caughtDialog) {
       return;
     }
 
@@ -86,15 +107,15 @@ class _GameState extends State<Game> {
   }
 
   void _onAccelerometer(AccelerometerEvent event) {
-    final magnitude = math.sqrt(
-      event.x * event.x + event.y * event.y + event.z * event.z,
-    );
-    final motion = (magnitude - 9.8).clamp(0.0, double.infinity);
+    final magnitude = calculateMagnitude(event.x, event.y, event.z);
+    final motion = calculateMotion(event.x, event.y, event.z);
 
-    final canCast = _socket.isConnected &&
-        _socket.isReady &&
-        _flow == _GameFlow.armed &&
-        !_hasCast;
+    final canUserCast = canCast(
+      isConnected: _socket.isConnected,
+      isReady: _socket.isReady,
+      flow: _flow,
+      hasCast: _hasCast,
+    );
 
     if (mounted) {
       setState(() {
@@ -103,11 +124,11 @@ class _GameState extends State<Game> {
         _debugAccelZ = event.z;
         _debugMagnitude = magnitude;
         _debugMotion = motion;
-        _debugCanCast = canCast;
+        _debugCanCast = canUserCast;
       });
     }
 
-    if (!canCast) {
+    if (!canUserCast) {
       return;
     }
 
@@ -117,7 +138,7 @@ class _GameState extends State<Game> {
 
     _hasCast = true;
     setState(() {
-      _flow = _GameFlow.waitingForBite;
+      _flow = GameFlow.waitingForBite;
     });
     _socket.sendAction('fish');
     if (mounted) {
@@ -130,7 +151,7 @@ class _GameState extends State<Game> {
 
     setState(() {
       _winDialogShowing = true;
-      _flow = _GameFlow.caughtDialog;
+      _flow = GameFlow.caughtDialog;
       _hasCast = false;
     });
 
@@ -374,11 +395,11 @@ class _GameState extends State<Game> {
                 _buildStatusCard(titleStyle, bodyStyle),
                 const SizedBox(height: 12),
               ],
-              if (_flow == _GameFlow.catching)
+              if (_flow == GameFlow.catching)
                 _buildCatchPanel()
-              else if (_flow == _GameFlow.caughtDialog)
+              else if (_flow == GameFlow.caughtDialog)
                 _buildCaughtPage(titleStyle)
-              else if (_flow == _GameFlow.waitingForBite)
+              else if (_flow == GameFlow.waitingForBite)
                 _buildWaitingPage(titleStyle)
               else
                 _buildCastingPage(titleStyle),

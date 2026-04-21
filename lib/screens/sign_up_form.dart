@@ -6,6 +6,17 @@ import '../widgets/auth_form_buttons.dart';
 import '../widgets/labeled_pixel_input.dart';
 import 'email_verification.dart';
 
+  bool isValidEmail(String email) {
+    final trimmed = email.trim();
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(trimmed);
+  }
+
+  bool isValidUsername(String username) {
+    final usernameRegex = RegExp(r'^[A-Za-z0-9_]+$');
+    return usernameRegex.hasMatch(username);
+  }
+
 class SignUpForm extends StatefulWidget {
   const SignUpForm({super.key});
 
@@ -32,17 +43,6 @@ class _SignUpFormState extends State<SignUpForm> {
     super.dispose();
   }
 
-  bool _isValidEmail(String email) {
-    final trimmed = email.trim();
-    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-    return emailRegex.hasMatch(trimmed);
-  }
-
-  bool _isValidUsername(String username) {
-    final usernameRegex = RegExp(r'^[A-Za-z0-9_]+$');
-    return usernameRegex.hasMatch(username);
-  }
-
   bool _validateFields() {
     bool isValid = true;
 
@@ -64,7 +64,7 @@ class _SignUpFormState extends State<SignUpForm> {
       } else if (username.length > 20) {
         _usernameError = 'Username must be 20 characters or less';
         isValid = false;
-      } else if (!_isValidUsername(username)) {
+      } else if (!isValidUsername(username)) {
         _usernameError = 'Use only letters, numbers, and underscores';
         isValid = false;
       }
@@ -72,7 +72,7 @@ class _SignUpFormState extends State<SignUpForm> {
       if (email.isEmpty) {
         _emailError = 'Email is required';
         isValid = false;
-      } else if (!_isValidEmail(email)) {
+      } else if (!isValidEmail(email)) {
         _emailError = 'Enter a valid email';
         isValid = false;
       }
