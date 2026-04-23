@@ -13,7 +13,7 @@ on:
 
 jobs:
   ci:
-    name: Analyze and Test
+    name: Analyze and Unit/Widget Test
     runs-on: ubuntu-latest
 
     steps:
@@ -37,10 +37,44 @@ jobs:
       - name: Test
         run: flutter test
 
+  integration_test:
+    name: Android Integration Tests
+    runs-on: macos-latest
+    needs: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install deps
+        run: flutter pub get
+
+      - name: Run integration tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            flutter test integration_test/real_auth_flow_test.dart \
+              --dart-define=TEST_EMAIL="${{ secrets.TEST_EMAIL }}" \
+              --dart-define=TEST_PASSWORD="${{ secrets.TEST_PASSWORD }}"
+
   build_branch_apk:
     name: Build Branch APK
     runs-on: ubuntu-latest
-    needs: ci
+    needs: [ci, integration_test]
     if: github.event_name == 'push' && github.ref != 'refs/heads/main'
 
     steps:
@@ -73,7 +107,7 @@ jobs:
   distribute_main:
     name: Distribute Main APK
     runs-on: ubuntu-latest
-    needs: ci
+    needs: [ci, integration_test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
