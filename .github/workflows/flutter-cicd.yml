@@ -33,17 +33,20 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install deps
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Unit and widget tests
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run unit and widget tests
         run: flutter test
 
   integration_test:
     name: Android Integration Tests
     runs-on: ubuntu-latest
     needs: ci
-    timeout-minutes: 20
+    timeout-minutes: 25
     if: github.event_name == 'workflow_dispatch'
 
     steps:
@@ -52,8 +55,7 @@ jobs:
 
       - name: Enable KVM
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
@@ -69,7 +71,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install deps
+      - name: Install dependencies
         run: flutter pub get
 
       - name: Run Android integration tests
@@ -80,54 +82,54 @@ jobs:
           profile: pixel_6
           target: google_apis
           force-avd-creation: false
-          emulator-options: -no-snapshot -no-boot-anim -no-audio -no-window
           disable-animations: true
+          emulator-options: -no-snapshot -no-boot-anim -no-audio -no-window
           script: |
             adb devices
             flutter test integration_test \
               --dart-define=TEST_EMAIL=${{ secrets.TEST_EMAIL }} \
               --dart-define=TEST_PASSWORD=${{ secrets.TEST_PASSWORD }}
 
-    build_branch_apk:
-      name: Build Branch APK
-      runs-on: ubuntu-latest
-      needs: ci
-      if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-
-        - name: Set up Java
-          uses: actions/setup-java@v4
-          with:
-            distribution: temurin
-            java-version: '17'
-
-        - name: Set up Flutter
-          uses: subosito/flutter-action@v2
-          with:
-            channel: stable
-            cache: true
-
-        - name: Install deps
-          run: flutter pub get
-
-        - name: Build debug APK
-          run: flutter build apk --debug
-
-        - name: Upload artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: apk-${{ github.ref_name }}
-            path: build/app/outputs/flutter-apk/app-debug.apk
-
-  distribute_main:
-    name: Distribute Main APK
+  build_branch_apk:
+    name: Build Branch APK
     runs-on: ubuntu-latest
-    needs:
-      - ci
-      - integration_test
+    needs: ci
+    timeout-minutes: 15
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: branch-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+  build_release_apk:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 20
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
@@ -146,33 +148,14 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install deps
+      - name: Install dependencies
         run: flutter pub get
 
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Write service account JSON
-        shell: bash
-        run: |
-          cat > firebase-service-account.json <<'EOF'
-          ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          EOF
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      - name: Distribute to Firebase App Distribution
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: firebase-service-account.json
-        run: |
-          firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk \
-            --app "${{ secrets.FIREBASE_APP_ID }}" \
-            --groups "${{ secrets.FIREBASE_TESTER_GROUPS }}" \
-            --release-notes "Build from ${{ github.sha }}"
-
-      - name: Upload release artifact
+      - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apk-main-release
+          name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
