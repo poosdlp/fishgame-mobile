@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/auth_service.dart';
 import '../widgets/auth_form_buttons.dart';
@@ -13,6 +14,10 @@ class LogInForm extends StatefulWidget {
 }
 
 class _LogInFormState extends State<LogInForm> {
+  static final Uri _forgotPasswordUri = Uri.parse(
+    'https://fishgame.0sake.net/forgot-password',
+  );
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
@@ -117,6 +122,19 @@ class _LogInFormState extends State<LogInForm> {
     await _showDialog(result.message);
   }
 
+  Future<void> _openForgotPassword() async {
+    final launched = await launchUrl(
+      _forgotPasswordUri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open forgot password page.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -172,6 +190,20 @@ class _LogInFormState extends State<LogInForm> {
                 setState(() => _passwordError = null);
               }
             },
+          ),
+          Padding(
+            padding: EdgeInsets.only(
+              top: sh * 0.02,
+              left: sw * 0.1,
+              right: sw * 0.1,
+            ),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _openForgotPassword,
+                child: const Text('Forgot Password'),
+              ),
+            ),
           ),
           AuthFormButtons(
             sh: sh,

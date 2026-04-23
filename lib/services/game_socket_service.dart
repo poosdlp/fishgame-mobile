@@ -12,7 +12,6 @@ class GameSocketService extends ChangeNotifier {
   static final GameSocketService instance = GameSocketService._();
 
   WebSocketChannel? _channel;
-  StreamSubscription<dynamic>? _subscription;
   Completer<bool>? _readyCompleter;
 
   bool _isConnecting = false;
@@ -65,9 +64,21 @@ class GameSocketService extends ChangeNotifier {
       return true;
     }
 
-    await disconnect(notify: false);
+    if (_isConnecting && _readyCompleter != null) {
+      return _waitForReady(_readyCompleter!, timeout);
+    }
 
-    _readyCompleter = Completer<bool>();
+    if (_isConnected && !_isReady && _readyCompleter != null) {
+      return _waitForReady(_readyCompleter!, timeout);
+    }
+
+    if (_isConnected && !_isReady && _readyCompleter == null) {
+      _readyCompleter = Completer<bool>();
+      return _waitForReady(_readyCompleter!, timeout);
+    }
+
+    final readyCompleter = Completer<bool>();
+    _readyCompleter = readyCompleter;
     final wsUri = _buildWsUri(token);
 
     _isConnecting = true;
@@ -78,48 +89,55 @@ class GameSocketService extends ChangeNotifier {
     notifyListeners();
 
     _pushEvent('Connecting to $wsUri');
+    debugPrint('WS status: connecting -> $wsUri');
 
     try {
       final channel = WebSocketChannel.connect(wsUri);
-      final subscription = channel.stream.listen(
-        _handleMessage,
-        onError: (Object error) {
-          _pushEvent('Socket error: $error');
-          _finishWithFailure('Socket error');
-        },
-        onDone: () {
-          _pushEvent('Socket closed');
-          _finishWithFailure('Disconnected');
-        },
-      );
+      channel.stream.listen(
+            _handleMessage,
+            onError: (Object error) {
+              _pushEvent('Socket error: $error');
+              debugPrint('WS status: error -> $error');
+              _finishWithFailure('Socket error');
+            },
+            onDone: () {
+              _pushEvent('Socket closed');
+              debugPrint('WS status: closed');
+              _finishWithFailure('Disconnected');
+            },
+          );
 
       _channel = channel;
-      _subscription = subscription;
       _isConnected = true;
       _connectionLabel = 'Connected';
       _isConnecting = false;
       notifyListeners();
 
       _pushEvent('Connected. Waiting for ready message.');
+      debugPrint('WS status: connected, waiting for ready');
 
-      final ready = await _readyCompleter!.future.timeout(
-        timeout,
-        onTimeout: () {
-          _pushEvent('Timed out waiting for ready message.');
-          return false;
-        },
-      );
+      final ready = await _waitForReady(readyCompleter, timeout);
 
-      if (!ready) {
-        await disconnect(notify: false);
-      }
+      debugPrint('WS status: readyFuture resolved -> $ready');
 
       return ready;
     } catch (error) {
       _pushEvent('Connection failed: $error');
-      await disconnect(notify: false);
+      debugPrint('WS status: connection failed -> $error');
+      _finishWithFailure('Connection failed');
       return false;
     }
+  }
+
+  Future<bool> _waitForReady(Completer<bool> completer, Duration timeout) {
+    return completer.future.timeout(
+      timeout,
+      onTimeout: () {
+        _pushEvent('Still waiting for ready message...');
+        debugPrint('WS status: still waiting for ready');
+        return false;
+      },
+    );
   }
 
   Future<bool> connectWithLoginToken({Duration timeout = const Duration(seconds: 15)}) async {
@@ -141,17 +159,20 @@ class GameSocketService extends ChangeNotifier {
 
     try {
       final decoded = jsonDecode(text);
-      if (decoded is! Map<String, dynamic>) {
+      final payload = _extractMessagePayload(decoded);
+      if (payload == null) {
         return;
       }
 
-      final type = decoded['type']?.toString();
-      final state = decoded['state']?.toString();
+      final type = payload['type']?.toString().toLowerCase();
+      final state = payload['state']?.toString().toLowerCase();
 
-      if (type == 'ready' && state != null) {
+      if ((type == 'ready' || (type == null && state != null)) && state != null) {
         _isReady = true;
         _gameState = state;
         _connectionLabel = 'Ready';
+        _pushEvent('Ready detected (state=$state).');
+        debugPrint('WS status: ready detected, state=$state');
         if (_readyCompleter != null && !_readyCompleter!.isCompleted) {
           _readyCompleter!.complete(true);
         }
@@ -160,7 +181,15 @@ class GameSocketService extends ChangeNotifier {
       }
 
       if (type == 'state' && state != null) {
+        _isReady = true;
         _gameState = state;
+        debugPrint('WS status: state update -> $state');
+        if (_connectionLabel == 'Connected') {
+          _connectionLabel = 'Ready';
+        }
+        if (_readyCompleter != null && !_readyCompleter!.isCompleted) {
+          _readyCompleter!.complete(true);
+        }
         notifyListeners();
       }
     } catch (_) {
@@ -168,11 +197,39 @@ class GameSocketService extends ChangeNotifier {
     }
   }
 
+  Map<String, dynamic>? _extractMessagePayload(dynamic decoded) {
+    if (decoded is Map<String, dynamic>) {
+      if (decoded['data'] is Map<String, dynamic>) {
+        return decoded['data'] as Map<String, dynamic>;
+      }
+      if (decoded['payload'] is Map<String, dynamic>) {
+        return decoded['payload'] as Map<String, dynamic>;
+      }
+      if (decoded['message'] is Map<String, dynamic>) {
+        return decoded['message'] as Map<String, dynamic>;
+      }
+
+      if (decoded['data'] is String) {
+        try {
+          final nested = jsonDecode(decoded['data'] as String);
+          if (nested is Map<String, dynamic>) {
+            return nested;
+          }
+        } catch (_) {}
+      }
+
+      return decoded;
+    }
+
+    return null;
+  }
+
   void _finishWithFailure(String label) {
     _isConnected = false;
     _isReady = false;
     _isConnecting = false;
     _connectionLabel = label;
+    debugPrint('WS status: failure -> $label');
     if (_readyCompleter != null && !_readyCompleter!.isCompleted) {
       _readyCompleter!.complete(false);
     }
@@ -181,19 +238,25 @@ class GameSocketService extends ChangeNotifier {
 
   void sendAction(String action) {
     if (!_isConnected || _channel == null) {
+      debugPrint('WS status: send skipped (not connected), action=$action');
       return;
     }
 
     final payload = jsonEncode(<String, String>{'action': action});
     _channel!.sink.add(payload);
+    debugPrint('WS status: sent action -> $action');
     _pushEvent('OUT: $payload');
   }
 
   Future<void> disconnect({bool notify = true}) async {
-    final subscription = _subscription;
+    debugPrint('WS status: disconnect requested but ignored (only logout may disconnect)');
+  }
+
+  Future<void> disconnectOnLogout({bool notify = true}) async {
+    debugPrint('WS status: logout disconnect requested');
+
     final channel = _channel;
 
-    _subscription = null;
     _channel = null;
     _isConnecting = false;
     _isConnected = false;
@@ -206,17 +269,16 @@ class GameSocketService extends ChangeNotifier {
     }
     _readyCompleter = null;
 
-    if (subscription != null) {
-      await subscription.cancel();
-    }
     if (channel != null) {
       await channel.sink.close();
     }
 
     if (notify) {
-      _pushEvent('Disconnected');
+      _pushEvent('Disconnected (logout)');
     } else {
       notifyListeners();
     }
+
+    debugPrint('WS status: disconnected on logout');
   }
 }

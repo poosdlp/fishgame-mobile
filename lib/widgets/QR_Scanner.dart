@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/auth_service.dart';
-import 'accelerometer.dart';
 
 bool truthholder = false;
 class ScanCodePage extends StatefulWidget {
@@ -33,6 +32,11 @@ class _ScanCodePageState extends State<ScanCodePage> {
 
     if (!mounted) return;
 
+    if (result.success) {
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      return;
+    }
+
     setState(() {
       _statusMessage = result.message;
       _isRequesting = false;
@@ -42,17 +46,6 @@ class _ScanCodePageState extends State<ScanCodePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('She pills on my ates'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SpeedPage()));
-            },
-            icon: const Icon(Icons.speed),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           Expanded(

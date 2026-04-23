@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -19,6 +21,11 @@ class _HomeState extends State<Home> {
   final AuthService _authService = AuthService();
   final GameSocketService _gameSocket = GameSocketService.instance;
 
+  bool _isLoggedIn = false;
+  bool _sessionResolved = false;
+  bool _autoConnectingSocket = false;
+  DateTime? _lastSocketAttemptAt;
+
   @override
   void initState() {
     super.initState();
@@ -34,15 +41,52 @@ class _HomeState extends State<Home> {
 
   void _onGameSocketChanged() {
     if (!mounted) return;
+    unawaited(_ensureSocketListeningIfLoggedIn());
     setState(() {});
   }
 
   void _loadSession() {
-    _currentUserFuture = _authService.getCurrentUser();
+    _currentUserFuture = _authService.getCurrentUser().then((user) {
+      _isLoggedIn = user != null;
+      _sessionResolved = true;
+      unawaited(_ensureSocketListeningIfLoggedIn());
+      return user;
+    });
+  }
+
+  Future<void> _ensureSocketListeningIfLoggedIn() async {
+    if (!_sessionResolved) {
+      return;
+    }
+
+    if (!_isLoggedIn) {
+      return;
+    }
+
+    if (_gameSocket.isConnected || _gameSocket.isConnecting || _autoConnectingSocket) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final lastAttempt = _lastSocketAttemptAt;
+    if (lastAttempt != null && now.difference(lastAttempt).inSeconds < 3) {
+      return;
+    }
+
+    _lastSocketAttemptAt = now;
+    _autoConnectingSocket = true;
+    try {
+      await _gameSocket.connectWithLoginToken(timeout: const Duration(seconds: 5));
+    } finally {
+      _autoConnectingSocket = false;
+    }
   }
 
   Future<void> _logout() async {
     await _authService.logout();
+    await _gameSocket.disconnectOnLogout(notify: false);
+    _isLoggedIn = false;
+    _sessionResolved = true;
     if (!mounted) return;
 
     setState(() {
@@ -50,26 +94,49 @@ class _HomeState extends State<Home> {
     });
   }
 
-  Future<void> _showDeleteAccountUnavailable() async {
+  Future<void> _deleteAccount() async {
     if (!mounted) return;
 
-    await showDialog<void>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete Account'),
-          content: const Text(
-            'The mobile app button is ready, but the backend does not have a delete account endpoint yet.',
-          ),
+          content: const Text('Are you sure you want to delete your account? This cannot be undone.'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD32F2F),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
             ),
           ],
         );
       },
     );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final result = await _authService.deleteAccount();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+
+    if (!result.success) {
+      return;
+    }
+
+    await _logout();
   }
 
   Future<void> _showSessionTokenDialog() async {
@@ -182,7 +249,7 @@ class _HomeState extends State<Home> {
     );
 
     return FishBackgroundScreen(
-      scrollable: false,
+      scrollable: true,
       child: SizedBox(
         width: double.infinity,
         child: Padding(
@@ -194,7 +261,7 @@ class _HomeState extends State<Home> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (!_gameSocket.isReady)
+                  if (!_gameSocket.isReady && _isLoggedIn)
                     SizedBox(
                       height: 36,
                       child: ElevatedButton.icon(
@@ -261,7 +328,7 @@ class _HomeState extends State<Home> {
                               height: 42,
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _showDeleteAccountUnavailable,
+                                onPressed: _deleteAccount,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFD32F2F),
                                   foregroundColor: Colors.white,
@@ -289,7 +356,7 @@ class _HomeState extends State<Home> {
               ),
               SizedBox(height: sh * 0.085),
               Text(
-                'Orlando\nFishing\nAdventure',
+                'Get\nHooked!',
                 textAlign: TextAlign.center,
                 style: titleStyle,
               ),
@@ -321,7 +388,7 @@ class _HomeState extends State<Home> {
                     child: Text('Play', style: playButtonStyle),
                   ),
                 ),
-              ] else ...[
+              ] else if (_isLoggedIn) ...[
                 Text(
                   'Scan the QR code to Play!',
                   textAlign: TextAlign.center,
