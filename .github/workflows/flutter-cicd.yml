@@ -37,7 +37,7 @@ jobs:
       - name: Test
         run: flutter test
 
-  integration_test:
+    integration_test:
     name: Android Integration Tests
     runs-on: macos-latest
     needs: ci
@@ -60,14 +60,19 @@ jobs:
       - name: Install deps
         run: flutter pub get
 
+      - name: Flutter doctor
+        run: flutter doctor -v
+
       - name: Run integration tests on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           profile: pixel_6
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
           script: |
-            flutter test integration_test/real_auth_flow_test.dart \
+            flutter test integration_test \
               --dart-define=TEST_EMAIL="${{ secrets.TEST_EMAIL }}" \
               --dart-define=TEST_PASSWORD="${{ secrets.TEST_PASSWORD }}"
 
