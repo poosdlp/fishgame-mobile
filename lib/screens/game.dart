@@ -11,7 +11,7 @@ import 'package:vibration/vibration.dart';
 import '../services/game_socket_service.dart';
 import '../widgets/fish_background_screen.dart';
 
-enum _GameFlow {
+enum GameFlow {
   casting,
   waiting,
   bite,
@@ -34,16 +34,18 @@ double calculateMotion(double x, double y, double z) {
   return (magnitude - 9.8).clamp(0.0, double.infinity);
 }
 
-bool canCast({
+bool canUseMotion({
   required bool isConnected,
   required bool isReady,
   required GameFlow flow,
-  required bool hasCast,
+  required bool motionLocked,
 }) {
   return isConnected &&
       isReady &&
-      flow == GameFlow.armed &&
-      !hasCast;
+      (flow == GameFlow.casting ||
+          flow == GameFlow.waiting ||
+          flow == GameFlow.bite) &&
+      !motionLocked;
 }
 
 class Game extends StatefulWidget {
@@ -58,7 +60,7 @@ class _GameState extends State<Game> {
   late final StreamSubscription<AccelerometerEvent> _accelerometerSubscription;
   Timer? _loseReturnTimer;
 
-  _GameFlow _flow = _GameFlow.casting;
+  GameFlow _flow = GameFlow.casting;
   bool _motionLocked = false;
 
   double _debugAccelX = 0.0;
@@ -90,19 +92,19 @@ class _GameState extends State<Game> {
 
     final state = _socket.gameState;
 
-    if (state == 'bite' && _flow == _GameFlow.waiting) {
+    if (state == 'bite' && _flow == GameFlow.waiting) {
       unawaited(_vibrateOnBite());
       setState(() {
-        _flow = _GameFlow.bite;
+        _flow = GameFlow.bite;
         _motionLocked = false;
         _debugPhase = 'bite';
       });
       return;
     }
 
-    if (state == 'none' && _flow == _GameFlow.bite) {
+    if (state == 'none' && _flow == GameFlow.bite) {
       setState(() {
-        _flow = _GameFlow.casting;
+        _flow = GameFlow.casting;
         _debugPhase = 'casting';
       });
       return;
@@ -110,7 +112,7 @@ class _GameState extends State<Game> {
 
     if (state == 'caught') {
       setState(() {
-        _flow = _GameFlow.caught;
+        _flow = GameFlow.caught;
         _motionLocked = false;
         _debugPhase = 'caught';
       });
@@ -121,20 +123,18 @@ class _GameState extends State<Game> {
   }
 
   void _onAccelerometer(AccelerometerEvent event) {
-    final magnitude = math.sqrt(
-      event.x * event.x + event.y * event.y + event.z * event.z,
-    );
-    final motion = (magnitude - 9.8).clamp(0.0, double.infinity);
+    final magnitude = calculateMagnitude(event.x, event.y, event.z);
+    final motion = calculateMotion(event.x, event.y, event.z);
     debugPrint(
       'Motion: ${motion.toStringAsFixed(3)} | Threshold: ${_motionThreshold.toStringAsFixed(3)}',
     );
 
-    final canUseMotion = _socket.isConnected &&
-      _socket.isReady &&
-      (_flow == _GameFlow.casting ||
-        _flow == _GameFlow.waiting ||
-        _flow == _GameFlow.bite) &&
-      !_motionLocked;
+    final canUseMotionNow = canUseMotion(
+      isConnected: _socket.isConnected,
+      isReady: _socket.isReady,
+      flow: _flow,
+      motionLocked: _motionLocked,
+    );
 
     if (mounted) {
       setState(() {
@@ -153,33 +153,33 @@ class _GameState extends State<Game> {
       return;
     }
 
-    if (!canUseMotion) {
+    if (!canUseMotionNow) {
       return;
     }
 
     _motionLocked = true;
 
-    if (_flow == _GameFlow.casting) {
+    if (_flow == GameFlow.casting) {
       _socket.sendAction('fish');
       setState(() {
-        _flow = _GameFlow.waiting;
+        _flow = GameFlow.waiting;
         _debugPhase = 'waiting';
       });
       return;
     }
 
-    if (_flow == _GameFlow.waiting) {
+    if (_flow == GameFlow.waiting) {
       _socket.sendAction('reel');
       setState(() {
-        _flow = _GameFlow.casting;
+        _flow = GameFlow.casting;
         _debugPhase = 'casting';
       });
       return;
     }
 
-    if (_flow == _GameFlow.bite) {
+    if (_flow == GameFlow.bite) {
       setState(() {
-        _flow = _GameFlow.minigame;
+        _flow = GameFlow.minigame;
         _debugPhase = 'minigame';
       });
     }
@@ -191,7 +191,7 @@ class _GameState extends State<Game> {
     _loseReturnTimer?.cancel();
     _socket.sendAction('catch');
     setState(() {
-      _flow = _GameFlow.caught;
+      _flow = GameFlow.caught;
       _motionLocked = false;
       _debugPhase = 'caught';
     });
@@ -202,7 +202,7 @@ class _GameState extends State<Game> {
 
     _socket.sendAction('reel');
     setState(() {
-      _flow = _GameFlow.lost;
+      _flow = GameFlow.lost;
       _motionLocked = false;
       _debugPhase = 'lost';
     });
@@ -410,20 +410,20 @@ class _GameState extends State<Game> {
     Widget body;
 
     switch (_flow) {
-      case _GameFlow.casting:
+      case GameFlow.casting:
         body = _buildCastingPage();
-      case _GameFlow.waiting:
+      case GameFlow.waiting:
         body = _buildWaitingPage();
-      case _GameFlow.bite:
+      case GameFlow.bite:
         body = _buildBitePage();
-      case _GameFlow.minigame:
+      case GameFlow.minigame:
         body = _CatchMiniGame(
           onWin: _onMinigameWin,
           onLose: _onMinigameLose,
         );
-      case _GameFlow.lost:
+      case GameFlow.lost:
         body = _buildLostPage();
-      case _GameFlow.caught:
+      case GameFlow.caught:
         body = _buildCaughtPage();
     }
 
