@@ -15,6 +15,7 @@ jobs:
   ci:
     name: Analyze and Unit/Widget Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -30,17 +31,23 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Install deps
         run: flutter pub get
 
-      - name: Test
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Unit and widget tests
         run: flutter test
 
-    integration_test:
+  integration_test:
     name: Android Integration Tests
     runs-on: macos-latest
     needs: ci
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout
@@ -56,6 +63,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Install deps
         run: flutter pub get
@@ -72,6 +80,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
+            adb devices
             flutter test integration_test \
               --dart-define=TEST_EMAIL="${{ secrets.TEST_EMAIL }}" \
               --dart-define=TEST_PASSWORD="${{ secrets.TEST_PASSWORD }}"
@@ -79,7 +88,7 @@ jobs:
   build_branch_apk:
     name: Build Branch APK
     runs-on: ubuntu-latest
-    needs: [ci, integration_test]
+    needs: ci
     if: github.event_name == 'push' && github.ref != 'refs/heads/main'
 
     steps:
@@ -96,6 +105,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Install deps
         run: flutter pub get
@@ -112,7 +122,9 @@ jobs:
   distribute_main:
     name: Distribute Main APK
     runs-on: ubuntu-latest
-    needs: [ci, integration_test]
+    needs:
+      - ci
+      - integration_test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
@@ -129,6 +141,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Install deps
         run: flutter pub get
